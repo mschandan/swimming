@@ -486,7 +486,7 @@ function enterApp(){
   document.getElementById('appShell').style.display='flex';
   if(members.length){ buildIndex(); paintStat(); }
   renderLog(); renderMembers(); renderDashboard();
-  if(CONFIG.SHEET_URL) sync(false);
+  sync(false);
   wireInput();
   show('scanView');
 }
@@ -543,7 +543,7 @@ async function lookup(raw, isRetry){
     return popup('warn','WHICH ONE?',{sub:hits.slice(0,6).map(h=>esc(val(h,'name'))+' — '+esc(val(h,'roll'))).join('<br>'), roll:raw});
   }
 
-  if(!isRetry && CONFIG.SHEET_URL){
+  if(!isRetry){
     popup('busy','CHECKING…',{sub:'Re-reading the sheet for new registrations', roll:raw});
     await sync(false);
     return lookup(raw, true);
@@ -556,7 +556,7 @@ async function lookup(raw, isRetry){
 function verdict(m, raw){
   const name = val(m,'name') || '—';
   const roll = val(m,'roll') || raw;
-  const end  = parseDate(val(m,'end'));
+  const end  = computeEnd(m);
   const stat = val(m,'status').toLowerCase().trim();
 
   if(INACTIVE.includes(stat)){
@@ -638,14 +638,14 @@ function renderDashboard(){
   const active = members.filter(m=>{
     const stat = val(m,'status').toLowerCase().trim();
     if(INACTIVE.includes(stat)) return false;
-    const end = parseDate(val(m,'end'));
+    const end = computeEnd(m);
     return end && monthsUntil(end) >= 0;
   });
   const inToday = new Set(t.filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
   const expiringThisMonth = members.filter(m=>{
     const stat = val(m,'status').toLowerCase().trim();
     if(INACTIVE.includes(stat)) return false;
-    const end = parseDate(val(m,'end'));
+    const end = computeEnd(m);
     return end && monthsUntil(end)===0;
   }).length;
 
@@ -792,7 +792,7 @@ let currentRoll=null;
 function openMember(roll){
   currentRoll=roll;
   const m=index[norm(roll)], s=statsFor(roll);
-  const end=m?parseDate(val(m,'end')):null;
+  const end=m?computeEnd(m):null;
   const monthsLeft=end?monthsUntil(end):null;
 
   let k='warn', label='NO END DATE';
@@ -870,7 +870,7 @@ function calendar(visits,end){
 function waRemind(){
   const m=index[norm(currentRoll)];
   if(!m) return;
-  const end=parseDate(val(m,'end'));
+  const end=computeEnd(m);
   const name=val(m,'name').split(' ')[0];
   const num=val(m,'phone').replace(/\D/g,'');
   const txt=encodeURIComponent('Hi '+name+', your swimming subscription '+
@@ -888,7 +888,7 @@ function renderMembers(){
 
   const todayRolls = new Set(todayLog().filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
   const rows=members.filter(m=>!q || (val(m,'name')+' '+val(m,'roll')).toLowerCase().includes(q)).map(m=>{
-    const end=parseDate(val(m,'end'));
+    const end=computeEnd(m);
     const monthsLeft=end?monthsUntil(end):null;
     const inactive = INACTIVE.includes(val(m,'status').toLowerCase().trim());
     let k='warn', label='NO DATE';
@@ -940,11 +940,12 @@ function toCsvUrl(u){
   return 'https://docs.google.com/spreadsheets/d/'+id+'/gviz/tq?tqx=out:csv&gid='+gid;
 }
 async function sync(loud){
-  if(!CONFIG.SHEET_URL){ if(loud) setMsg('settingsMsg','err','No sheet configured in config.js yet.'); return; }
   if(syncing) return;
   syncing=true;
   try{
-    const url=toCsvUrl(CONFIG.SHEET_URL);
+    // Falls back to a local data.csv when no Google Sheet is configured yet —
+    // set CONFIG.SHEET_URL once a real sheet exists and this switches over automatically.
+    const url = CONFIG.SHEET_URL ? toCsvUrl(CONFIG.SHEET_URL) : 'data.csv';
     const res=await fetch(url+(url.includes('?')?'&':'?')+'cb='+Date.now());
     if(!res.ok) throw new Error('HTTP '+res.status);
     const text=await res.text();
@@ -989,7 +990,7 @@ function resolveMap(hdrs, rows){
   const cfg = CONFIG.COLUMNS || {};
   const auto = autoMap(hdrs, rows);
   const out = {};
-  ['roll','name','end','start','phone','status','category','gender'].forEach(k=>{
+  ['roll','name','end','start','phone','status','category','gender','paymentDate','amount'].forEach(k=>{
     out[k] = (cfg[k] && hdrs.includes(cfg[k])) ? cfg[k] : auto[k];
   });
   return out;
@@ -1005,11 +1006,14 @@ function autoMap(hdrs,rows){
   m.roll = (best && score>=Math.max(2,sample.length*0.3)) ? best
          : pick(hdrs,['roll no','rollno','roll number','roll_no','roll','student id','id no','id']);
   m.name  =pick(hdrs,['name','student name','full name']);
-  m.end   =pick(hdrs,['subscription ending month','ending month','end month','plan end','end date','valid till','valid until','expiry','expiry date','expires','end','till','renewal date','due date','validity']);
-  m.start =pick(hdrs,['plan start','start date','from','joined','start','registration date','date']);
+  // an explicit expiry column always wins if present — everything below is the fallback computation path
+  m.end   =pick(hdrs,['subscription ending month','ending month','end month','plan end','end date','valid till','valid until','expiry','expiry date','expires','renewal date','due date']);
+  m.paymentDate=pick(hdrs,['date','payment date','date of payment','paid on','transaction date']);
+  m.amount=pick(hdrs,['amount','fee','fees','amount paid','payment']);
+  m.category=pick(hdrs,['category','applicable to','type','program','level','swim category','group','training type']);
+  m.start =pick(hdrs,['plan start','start date','from','joined','registration date']);
   m.phone =pick(hdrs,['phone','mobile','contact','phone no','mobile no','whatsapp']);
   m.status=pick(hdrs,['status','active','payment status','remarks']);
-  m.category=pick(hdrs,['category','type','program','level','swim category','group','training type']);
   m.gender=pick(hdrs,['gender','sex','male/female','m/f']);
   return m;
 }
@@ -1021,18 +1025,53 @@ function pick(hdrs,wants){
 }
 function val(m,key){ return (map[key] && m[map[key]]!=null) ? String(m[map[key]]) : ''; }
 
+/* =====================================================================
+   EXPIRY — computed, not read.
+   Most sheets don't carry an expiry date at all: just who paid, when,
+   how much, and what category. The actual plan length (1/3/6/12 months,
+   or a single-day guest slot) is looked up from CONFIG.PLANS, keyed by
+   category then exact amount paid. If a column called 'end' exists AND
+   has a value for that row, it always wins — lets a sheet override any
+   individual member by hand. If the amount doesn't match any known
+   price for that category, we deliberately return null rather than
+   guess — a wrong guess either locks out someone who paid or lets
+   someone in for free; null instead falls through to the existing
+   "NO END DATE — check manually" state everywhere it's used.         */
+function addMonths(d, n){
+  const y = d.getFullYear(), m = d.getMonth()+n;
+  const ny = y + Math.floor(m/12), nm = ((m%12)+12)%12;
+  const lastDay = new Date(ny, nm+1, 0).getDate();
+  return new Date(ny, nm, Math.min(d.getDate(), lastDay));
+}
+function computeEnd(m){
+  const explicit = parseDate(val(m,'end'));
+  if(explicit) return explicit;
+
+  const paid = parseDate(val(m,'paymentDate'));
+  const amt  = parseFloat(String(val(m,'amount')).replace(/[^\d.]/g,''));
+  const cat  = val(m,'category').toLowerCase().trim();
+  if(!paid || isNaN(amt) || !cat) return null;
+
+  const plan = (CONFIG.PLANS||{})[cat];
+  if(!plan || plan[amt]==null) return null;
+
+  const months = plan[amt];
+  return months===0 ? paid : addMonths(paid, months);
+}
+
 /* ---------------- dev helpers (not linked from any button) ---------------- */
 function loadDemo(){
-  headers=['Roll No','Name','Status','Ending Month','Gender','Category'];
-  const mk=(r,n,st,e,g,c)=>({'Roll No':r,'Name':n,'Phone':'','Status':st,'Ending Month':e,'Gender':g,'Category':c});
-  const mo=n=>{ const x=new Date(); x.setMonth(x.getMonth()+n); return MON[x.getMonth()]+' '+x.getFullYear(); };
+  headers=['id','NAME','DATE','AMOUNT','CATEGORY','Status','Gender'];
+  const mk=(r,n,d,a,c,st,g)=>({'id':r,'NAME':n,'DATE':d,'AMOUNT':a,'CATEGORY':c,'Status':st,'Gender':g,'Phone':''});
+  const day=n=>{ const x=new Date(); x.setDate(x.getDate()+n); return fmtISO(x); };
   members=[
-    mk('MS24BTECH11021','Ravi Kumar','Active',mo(1),'Male','Usual'),
-    mk('CS23BTECH11004','Ananya Sharma','Active',mo(0),'Female','Training'),
-    mk('EE22BTECH11055','Imran Qureshi','Active',mo(-1),'Male','Beginner'),
-    mk('ME24MTECH21007','Priya Nair','Active',mo(3),'Female','Inter-IIT'),
-    mk('BT23BTECH11090','Rohit Verma','Inactive',mo(2),'Male','Usual'),
-    mk('CH00COACH00001','Chandan','Active',mo(4),'Male','Professional'),
+    mk('MS24BTECH11021','Ravi Kumar',day(-10),1200,'Student of IITH','Active','Male'),      // 3mo plan, mid-way
+    mk('CS23BTECH11004','Ananya Sharma',day(-58),500,'Student of IITH','Active','Female'),   // 1mo plan, expires very soon
+    mk('EE22BTECH11055','Imran Qureshi',day(-95),500,'Student of IITH','Active','Male'),     // 1mo plan, already expired
+    mk('ME24MTECH21007','Priya Nair',day(-20),3500,'Student of IITH','Active','Female'),     // annual
+    mk('BT23BTECH11090','Rohit Verma',day(-10),2000,'Faculty/Guest faculty/Staff/Project staff of IITH','Inactive','Male'),
+    mk('CH00COACH00001','Chandan',day(-30),6000,'Faculty/Guest faculty/Staff/Project staff of IITH','Active','Male'), // annual
+    mk('GUEST00001','Demo Guest',day(0),200,'Guest per slot','Active','Male'),                // single-day pass, today
   ];
   map=autoMap(headers,members);
   buildIndex(); paintStat(); renderMembers();
@@ -1080,6 +1119,7 @@ const MONTH_NAMES = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,au
 function parseDate(s){
   if(!s) return null;
   s=String(s).trim(); if(!s) return null;
+  s=s.replace(/[\\:]/g,'-');   // real sheets show up with "16:07:2026" and "21\7\26" — treat like any other separator
 
   let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if(m) return new Date(+m[1],+m[2]-1,+m[3]);
@@ -1156,8 +1196,8 @@ function init(){
   if(isUnlocked()) enterApp();
   else document.getElementById('landingView').classList.add('on');
 
-  setInterval(()=>{ if(isUnlocked() && CONFIG.SHEET_URL) sync(false); }, SYNC_EVERY_MS);
-  window.addEventListener('focus', ()=>{ if(isUnlocked() && CONFIG.SHEET_URL) sync(false); });
+  setInterval(()=>{ if(isUnlocked()) sync(false); }, SYNC_EVERY_MS);
+  window.addEventListener('focus', ()=>{ if(isUnlocked()) sync(false); });
 }
 init();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
