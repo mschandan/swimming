@@ -33,7 +33,7 @@ const CONFIG = {
      to stop a casual visitor who finds the link from opening member
      data or the scanner, not to resist a determined attacker.
      4 digits, shown on the lock screen as ● ● ● ●. */
-  PIN: '2846',
+  PIN: '2026',
 
   /* ---- Public landing page copy ----
      Shown to anyone who opens the link, no PIN needed. Edit freely. */
