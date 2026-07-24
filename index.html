@@ -434,7 +434,6 @@ code{font:600 12.5px var(--mono);background:var(--ink);padding:3px 7px;border-ra
    ===================================================================== */
 
 const LS = { log:'pg_log', rows:'pg_rows', hdr:'pg_hdr', synced:'pg_synced', unlocked:'pg_unlocked' };
-const EXPIRY_WARN_DAYS = 7;
 const SYNC_EVERY_MS    = 60000;
 const INACTIVE = ['inactive','cancelled','canceled','stopped','no','left','suspended','expired'];
 
@@ -558,24 +557,22 @@ function verdict(m, raw){
   const name = val(m,'name') || '—';
   const roll = val(m,'roll') || raw;
   const end  = parseDate(val(m,'end'));
-  const start= parseDate(val(m,'start'));
   const stat = val(m,'status').toLowerCase().trim();
 
   if(INACTIVE.includes(stat)){
     beep('bad'); record(roll,name,'INACTIVE');
-    return popup('bad','NOT ACTIVE',{sub:'Sheet says <b>'+esc(val(m,'status'))+'</b>', roll, name});
+    return popup('bad','NOT ACTIVE',{sub:'Sheet says <b>'+esc(val(m,'status'))+'</b>', roll, name, m});
   }
   if(!end){
     beep('warn'); record(roll,name,'NO DATE');
-    return popup('warn','NO END DATE',{sub:'No expiry in the sheet — check manually', roll, name});
+    return popup('warn','NO END DATE',{sub:'No expiry month in the sheet — check manually', roll, name, m});
   }
 
-  const today = midnight(new Date());
-  const days  = Math.round((midnight(end) - today) / 86400000);
+  const monthsLeft = monthsUntil(end);
 
-  if(days < 0){
+  if(monthsLeft < 0){
     beep('bad'); record(roll,name,'EXPIRED');
-    return popup('bad','EXPIRED',{sub:'Ended <b>'+fmt(end)+'</b> — '+(-days)+' day'+(-days===1?'':'s')+' ago. Send to office.', roll, name});
+    return popup('bad','EXPIRED',{sub:'Ended <b>'+monthLabel(end)+'</b> — send to office', roll, name, m, end, monthsLeft});
   }
 
   const earlier = log.filter(e=> norm(e.roll)===norm(roll) && e.verdict==='PAID'
@@ -586,16 +583,16 @@ function verdict(m, raw){
     beep('warn'); record(roll,name,'REPEAT');
     return popup('warn', ordinal(earlier.length+1)+' ENTRY TODAY',{
       sub:'Already in at <b>'+time(new Date(first.ts))+'</b>'+(mins<90?' — '+mins+' min ago':''),
-      roll, name, m, end, start, days});
+      roll, name, m, end, monthsLeft});
   }
 
   record(roll,name,'PAID');
-  if(days <= EXPIRY_WARN_DAYS){
+  if(monthsLeft===0){
     beep('warn');
-    return popup('warn','EXPIRING SOON',{sub:days+' day'+(days===1?'':'s')+' left — ask them to renew', roll, name, m, end, start, days});
+    return popup('warn','EXPIRES THIS MONTH',{sub:'Renews/ends in <b>'+monthLabel(end)+'</b> — ask them to renew', roll, name, m, end, monthsLeft});
   }
   beep('ok');
-  popup('ok','PAID',{sub:'Entry logged', roll, name, m, end, start, days});
+  popup('ok','PAID',{sub:'Entry logged', roll, name, m, end, monthsLeft});
 }
 function ordinal(n){ const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
 
@@ -613,14 +610,17 @@ function popup(kind, big, opt){
 
   const rail = document.getElementById('vrail');
   const chips = [];
-  if(opt.end)   chips.push([fmt(opt.end), 'Valid till']);
-  if(opt.days!=null) chips.push([opt.days+'d', 'Days left']);
+  if(opt.end) chips.push([monthLabel(opt.end), 'Expires']);
+  if(opt.monthsLeft!=null){
+    chips.push([opt.monthsLeft<0?(-opt.monthsLeft)+' mo ago':opt.monthsLeft===0?'This month':opt.monthsLeft+' mo left', 'Time left']);
+  }
+  const cat = opt.m ? val(opt.m,'category') : '';
+  if(cat) chips.push([cat, 'Category']);
   if(opt.roll){
     const s = statsFor(opt.roll);
     chips.push([s.weekStreak, 'Week streak']);
     chips.push([time(new Date()), 'Entry time']);
     chips.push([s.month, 'Sessions this mo']);
-    chips.push([s.prevLabel || '—', 'Previously here']);
   }
   rail.style.display = chips.length ? 'grid' : 'none';
   rail.innerHTML = chips.map(([v,l])=>'<div class="vchip"><div class="vv">'+esc(String(v))+'</div><div class="vl">'+l+'</div></div>').join('');
@@ -639,16 +639,22 @@ function renderDashboard(){
     const stat = val(m,'status').toLowerCase().trim();
     if(INACTIVE.includes(stat)) return false;
     const end = parseDate(val(m,'end'));
-    return end && midnight(end) >= midnight(new Date());
+    return end && monthsUntil(end) >= 0;
   });
   const inToday = new Set(t.filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
+  const expiringThisMonth = members.filter(m=>{
+    const stat = val(m,'status').toLowerCase().trim();
+    if(INACTIVE.includes(stat)) return false;
+    const end = parseDate(val(m,'end'));
+    return end && monthsUntil(end)===0;
+  }).length;
 
   document.getElementById('dashTiles').innerHTML =
     tile(inToday.size,'Swimmers in','of '+active.length+' active members')+
     tile(t.filter(e=>kindOf(e.verdict)==='bad').length,'Turned away','expired or unknown today')+
     tile(active.length - inToday.size,'Not in yet','active, haven’t scanned today')+
     tile(busiestHour(t),'Busiest hour','across today')+
-    tile(members.filter(m=>{const d=parseDate(val(m,'end'));return d&&Math.round((midnight(d)-midnight(new Date()))/86400000)<=EXPIRY_WARN_DAYS&&Math.round((midnight(d)-midnight(new Date()))/86400000)>=0;}).length,'Expiring soon','within 7 days');
+    tile(expiringThisMonth,'Expiring this month','renew before month end');
 
   const feed = document.getElementById('feedTable');
   if(!log.length){ feed.innerHTML='<div class="empty">No scans yet today.</div>'; return; }
@@ -786,33 +792,34 @@ let currentRoll=null;
 function openMember(roll){
   currentRoll=roll;
   const m=index[norm(roll)], s=statsFor(roll);
-  const end=m?parseDate(val(m,'end')):null, start=m?parseDate(val(m,'start')):null;
-  const today=midnight(new Date());
-  const days=end?Math.round((midnight(end)-today)/86400000):null;
+  const end=m?parseDate(val(m,'end')):null;
+  const monthsLeft=end?monthsUntil(end):null;
 
   let k='warn', label='NO END DATE';
   if(m && INACTIVE.includes(val(m,'status').toLowerCase().trim())){ k='bad'; label='NOT ACTIVE'; }
-  else if(days!==null){
-    if(days<0){ k='bad'; label='EXPIRED '+(-days)+'D AGO'; }
-    else if(days<=EXPIRY_WARN_DAYS){ k='warn'; label=days+' DAYS LEFT'; }
-    else { k='ok'; label='PAID · '+days+' DAYS LEFT'; }
+  else if(monthsLeft!==null){
+    if(monthsLeft<0){ k='bad'; label='EXPIRED'; }
+    else if(monthsLeft===0){ k='warn'; label='EXPIRES THIS MONTH'; }
+    else { k='ok'; label=monthsLeft+' MO LEFT'; }
   }
-  let pct=0;
-  if(start&&end&&end>start) pct=Math.min(100,Math.max(0,(today-midnight(start))/(midnight(end)-midnight(start))*100));
   const phone=m?val(m,'phone'):'';
+  const category=m?val(m,'category'):'';
+  const gender=m?val(m,'gender'):'';
+  const tags=[category,gender].filter(Boolean);
 
   document.getElementById('profile').innerHTML =
     '<div class="phead">'+
       '<div><h2>'+esc(m?val(m,'name'):'Unknown member')+'</h2>'+
         '<div class="sub mono" style="margin:6px 0 0;letter-spacing:2px">'+esc(String(roll).toUpperCase())+
-        (phone?' &nbsp;·&nbsp; '+esc(phone):'')+'</div></div>'+
+        (phone?' &nbsp;·&nbsp; '+esc(phone):'')+'</div>'+
+        (tags.length?'<div class="row" style="margin-top:10px">'+tags.map(t=>'<span class="pill" style="border-color:var(--line);color:var(--dim)">'+esc(t)+'</span>').join('')+'</div>':'')+
+      '</div>'+
       '<div class="spacer"></div>'+
       '<span class="pill '+k+'" style="font-size:12px;padding:6px 14px">'+label+'</span>'+
     '</div>'+
-    (start&&end ? '<div class="card"><label>Subscription</label>'+
-      '<div class="bar '+(k==='ok'?'':k)+'"><i style="width:'+pct.toFixed(1)+'%"></i></div>'+
-      '<div class="sub mono" style="margin:0;display:flex;justify-content:space-between;font-size:11.5px">'+
-        '<span>'+fmt(start)+'</span><span>'+fmt(end)+'</span></div></div>' : '')+
+    (end ? '<div class="card"><label>Subscription</label>'+
+      '<div class="sub" style="margin:0">Expires <b style="color:var(--txt)">'+monthLabel(end)+'</b>'+
+      (monthsLeft>0?' — '+monthsLeft+' month'+(monthsLeft===1?'':'s')+' left':monthsLeft===0?' — this month':' — expired')+'</div></div>' : '')+
     '<div class="tiles">'+
       tile(s.total,'Total sessions', s.first?('since '+fmt(parseDate(s.first))):'no visits yet')+
       tile(s.month,'This month','')+
@@ -824,7 +831,7 @@ function openMember(roll){
     (phone ? '<div class="row" style="margin:0 0 18px"><button onclick="waRemind()">Message on WhatsApp</button></div>' : '')+
     '<div class="card"><label>Attendance</label>'+
       '<div class="sub" style="margin:-4px 0 18px">Last 6 months</div>'+
-      calendar(s.days,start,end)+
+      calendar(s.days,end)+
       '<div class="legend">'+
         '<span><i style="background:var(--aqua)"></i>came</span>'+
         '<span><i style="background:var(--cyan)"></i>scanned twice</span>'+
@@ -838,7 +845,7 @@ function openMember(roll){
 function tile(n,l,s){
   return '<div class="tile"><div class="n">'+n+'</div><div class="l">'+l+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
 }
-function calendar(visits,start,end){
+function calendar(visits,end){
   const out=[], now=new Date(), todayISO=fmtISO(now);
   for(let back=5; back>=0; back--){
     const cur=new Date(now.getFullYear(), now.getMonth()-back, 1);
@@ -850,7 +857,7 @@ function calendar(visits,start,end){
       const date=new Date(y,mo,d), iso=fmtISO(date), n=visits[iso]||0;
       let cls='d';
       if(n>1) cls+=' hit2'; else if(n===1) cls+=' hit';
-      else if(start&&end&&date>=midnight(start)&&date<=midnight(end)&&date<=midnight(now)) cls+=' in';
+      else if(date<=midnight(now) && (!end || date<=midnight(end))) cls+=' in';
       if(iso===todayISO) cls+=' today';
       cells+='<div class="'+cls+'" title="'+fmt(date)+(n?' — '+n+' scan'+(n>1?'s':''):'')+'">'+d+'</div>';
     }
@@ -876,31 +883,30 @@ function renderMembers(){
   const q=(document.getElementById('memberSearch').value||'').toLowerCase();
   const box=document.getElementById('memberTable');
   document.getElementById('adminSub').textContent =
-    members.length ? members.length+' members · sorted by who expires first' : 'Nothing loaded yet';
+    members.length ? members.length+' members · not-in-yet first, then who expires soonest' : 'Nothing loaded yet';
   if(!members.length){ box.innerHTML='<div class="empty">Nothing loaded.</div>'; return; }
 
-  const today=midnight(new Date());
   const todayRolls = new Set(todayLog().filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
   const rows=members.filter(m=>!q || (val(m,'name')+' '+val(m,'roll')).toLowerCase().includes(q)).map(m=>{
     const end=parseDate(val(m,'end'));
-    const days=end?Math.round((midnight(end)-today)/86400000):null;
+    const monthsLeft=end?monthsUntil(end):null;
     const inactive = INACTIVE.includes(val(m,'status').toLowerCase().trim());
     let k='warn', label='NO DATE';
     if(inactive){ k='bad'; label='NOT ACTIVE'; }
-    else if(days!==null){
-      if(days<0){ k='bad'; label='EXPIRED'; }
-      else if(days<=EXPIRY_WARN_DAYS){ k='warn'; label=days+'D LEFT'; }
+    else if(monthsLeft!==null){
+      if(monthsLeft<0){ k='bad'; label='EXPIRED'; }
+      else if(monthsLeft===0){ k='warn'; label='THIS MONTH'; }
       else { k='ok'; label='PAID'; }
     }
     const camToday = todayRolls.has(norm(val(m,'roll')));
-    const eligible = !inactive && days!==null && days>=0;
-    return {m,end,days,k,label,camToday,eligible};
+    const eligible = !inactive && monthsLeft!==null && monthsLeft>=0;
+    return {m,end,monthsLeft,k,label,camToday,eligible};
   }).sort((a,b)=>{
     if(a.eligible && b.eligible && a.camToday!==b.camToday) return a.camToday? -1:1;
-    return (a.days===null?9e9:a.days)-(b.days===null?9e9:b.days);
+    return (a.monthsLeft===null?9e9:a.monthsLeft)-(b.monthsLeft===null?9e9:b.monthsLeft);
   });
 
-  box.innerHTML='<table><tr><th>Roll no</th><th>Name</th><th>Valid till</th><th>Sessions</th><th>Last visit</th><th>Today</th><th>Status</th></tr>'+
+  box.innerHTML='<table><tr><th>Roll no</th><th>Name</th><th>Category</th><th>Gender</th><th>Expires</th><th>Sessions</th><th>Last visit</th><th>Today</th><th>Status</th></tr>'+
     rows.map(r=>{
       const s=statsFor(val(r.m,'roll'));
       const rowTint = !r.eligible ? '' : r.camToday ? 'background:rgba(0,229,138,.05)' : 'background:rgba(255,77,94,.045)';
@@ -908,7 +914,8 @@ function renderMembers(){
         : r.camToday ? '<span class="pill ok">IN</span>' : '<span class="pill bad">NOT IN</span>';
       return '<tr class="click" style="'+rowTint+'" onclick="openMember(\''+esc(val(r.m,'roll'))+'\')">'+
         '<td class="mono">'+esc(val(r.m,'roll'))+'</td><td>'+esc(val(r.m,'name'))+'</td>'+
-        '<td class="mono">'+(r.end?fmt(r.end):'—')+'</td>'+
+        '<td>'+esc(val(r.m,'category')||'—')+'</td><td>'+esc(val(r.m,'gender')||'—')+'</td>'+
+        '<td class="mono">'+(r.end?monthLabel(r.end):'—')+'</td>'+
         '<td class="mono">'+(s.total||'—')+(s.total?' <span style="color:var(--faint)">('+s.month+' this mo)</span>':'')+'</td>'+
         '<td class="mono">'+s.lastLabel+'</td>'+
         '<td>'+today+'</td>'+
@@ -982,7 +989,7 @@ function resolveMap(hdrs, rows){
   const cfg = CONFIG.COLUMNS || {};
   const auto = autoMap(hdrs, rows);
   const out = {};
-  ['roll','name','end','start','phone','status'].forEach(k=>{
+  ['roll','name','end','start','phone','status','category','gender'].forEach(k=>{
     out[k] = (cfg[k] && hdrs.includes(cfg[k])) ? cfg[k] : auto[k];
   });
   return out;
@@ -998,10 +1005,12 @@ function autoMap(hdrs,rows){
   m.roll = (best && score>=Math.max(2,sample.length*0.3)) ? best
          : pick(hdrs,['roll no','rollno','roll number','roll_no','roll','student id','id no','id']);
   m.name  =pick(hdrs,['name','student name','full name']);
-  m.end   =pick(hdrs,['plan end','end date','valid till','valid until','expiry','expiry date','expires','end','till','renewal date','due date','validity']);
+  m.end   =pick(hdrs,['subscription ending month','ending month','end month','plan end','end date','valid till','valid until','expiry','expiry date','expires','end','till','renewal date','due date','validity']);
   m.start =pick(hdrs,['plan start','start date','from','joined','start','registration date','date']);
   m.phone =pick(hdrs,['phone','mobile','contact','phone no','mobile no','whatsapp']);
   m.status=pick(hdrs,['status','active','payment status','remarks']);
+  m.category=pick(hdrs,['category','type','program','level','swim category','group','training type']);
+  m.gender=pick(hdrs,['gender','sex','male/female','m/f']);
   return m;
 }
 function pick(hdrs,wants){
@@ -1014,16 +1023,16 @@ function val(m,key){ return (map[key] && m[map[key]]!=null) ? String(m[map[key]]
 
 /* ---------------- dev helpers (not linked from any button) ---------------- */
 function loadDemo(){
-  headers=['Roll No','Name','Phone','Plan Start','Plan End','Status'];
-  const mk=(r,n,p,s,e,st)=>({'Roll No':r,'Name':n,'Phone':p,'Plan Start':s,'Plan End':e,'Status':st});
-  const d=n=>{ const x=new Date(); x.setDate(x.getDate()+n); return fmtISO(x); };
+  headers=['Roll No','Name','Status','Ending Month','Gender','Category'];
+  const mk=(r,n,st,e,g,c)=>({'Roll No':r,'Name':n,'Phone':'','Status':st,'Ending Month':e,'Gender':g,'Category':c});
+  const mo=n=>{ const x=new Date(); x.setMonth(x.getMonth()+n); return MON[x.getMonth()]+' '+x.getFullYear(); };
   members=[
-    mk('MS24BTECH11021','Ravi Kumar','9876543210',d(-95),d(38),'Active'),
-    mk('CS23BTECH11004','Ananya Sharma','9812345678',d(-60),d(3),'Active'),
-    mk('EE22BTECH11055','Imran Qureshi','9900112233',d(-90),d(-12),'Active'),
-    mk('ME24MTECH21007','Priya Nair','9765432109',d(-40),d(80),'Active'),
-    mk('BT23BTECH11090','Rohit Verma','9123456780',d(-40),d(25),'Inactive'),
-    mk('CH00COACH00001','Chandan','9000090000',d(-180),d(120),'Active'),
+    mk('MS24BTECH11021','Ravi Kumar','Active',mo(1),'Male','Usual'),
+    mk('CS23BTECH11004','Ananya Sharma','Active',mo(0),'Female','Training'),
+    mk('EE22BTECH11055','Imran Qureshi','Active',mo(-1),'Male','Beginner'),
+    mk('ME24MTECH21007','Priya Nair','Active',mo(3),'Female','Inter-IIT'),
+    mk('BT23BTECH11090','Rohit Verma','Inactive',mo(2),'Male','Usual'),
+    mk('CH00COACH00001','Chandan','Active',mo(4),'Male','Professional'),
   ];
   map=autoMap(headers,members);
   buildIndex(); paintStat(); renderMembers();
@@ -1062,20 +1071,52 @@ function fmt(d){ return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear(); }
 function fmtISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function time(d){ let h=d.getHours(); const ap=h<12?'AM':'PM'; h=h%12||12;
   return h+':'+String(d.getMinutes()).padStart(2,'0')+' '+ap; }
+/* Members' sheets rarely carry exact dates — usually just "the month it
+   ends" (July, Aug 2026, 2026-09...). This parser accepts exact dates
+   AND bare months; either way, status logic below only ever looks at
+   month+year, never the day, since that's the real precision we have. */
+const MONTH_NAMES = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11,
+  jan:0,feb:1,mar:2,apr:3,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
 function parseDate(s){
   if(!s) return null;
   s=String(s).trim(); if(!s) return null;
+
   let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if(m) return new Date(+m[1],+m[2]-1,+m[3]);
+
   m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if(m){
     let a=+m[1], b=+m[2], y=+m[3]; if(y<100) y+=2000;
     if(b>12 && a<=12){ const t=a; a=b; b=t; }
     return new Date(y,b-1,a);
   }
+
+  const nameMatch = s.toLowerCase().match(/[a-z]+/);
+  if(nameMatch && MONTH_NAMES.hasOwnProperty(nameMatch[0])){
+    const mo = MONTH_NAMES[nameMatch[0]];
+    const yMatch = s.match(/(\d{4})/);
+    const yr = yMatch ? +yMatch[1] : new Date().getFullYear();
+    return new Date(yr, mo, 1);
+  }
+
+  m=s.match(/^(\d{1,2})[\/\-](\d{4})$/);
+  if(m) return new Date(+m[2], +m[1]-1, 1);
+  m=s.match(/^(\d{4})[\/\-](\d{1,2})$/);
+  if(m) return new Date(+m[1], +m[2]-1, 1);
+
+  m=s.match(/^(\d{1,2})$/);
+  if(m && +m[1]>=1 && +m[1]<=12) return new Date(new Date().getFullYear(), +m[1]-1, 1);
+
   const t=Date.parse(s);
   return isNaN(t)?null:new Date(t);
 }
+/* Status is always month-granularity: 0 = expires this month, negative =
+   already past, positive = that many months still ahead. */
+function monthsUntil(d){
+  const now=new Date();
+  return (d.getFullYear()-now.getFullYear())*12 + (d.getMonth()-now.getMonth());
+}
+function monthLabel(d){ return MON[d.getMonth()]+' '+d.getFullYear(); }
 function parseCSV(text){
   const rows=[]; let row=[],cell='',q=false;
   text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');

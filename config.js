@@ -17,14 +17,22 @@ const CONFIG = {
      Exact column header text from row 1 of the sheet. Leave a field ''
      if that column doesn't exist. If ROLL or END is wrong/missing the
      app will fall back to guessing by data shape, but exact names are
-     safer once you know them. */
+     safer once you know them.
+
+     'end' does NOT need an exact date — the sheet only has to say the
+     MONTH a subscription ends (e.g. "July", "Aug 2026", "2026-09", or
+     a full date if you ever have one). The app computes everything
+     else itself: expired / expiring-this-month / active, months left,
+     sorting — all done live from just that one month value. */
   COLUMNS: {
-    roll:   '',   // e.g. 'Roll No'
-    name:   '',   // e.g. 'Name'
-    end:    '',   // e.g. 'Plan End'
-    start:  '',   // e.g. 'Plan Start'
-    phone:  '',   // e.g. 'Phone'
-    status: '',   // e.g. 'Status'
+    roll:     '',   // e.g. 'Roll No'
+    name:     '',   // e.g. 'Name'
+    end:      '',   // e.g. 'Subscription Ending Month'
+    start:    '',   // optional, not required
+    phone:    '',   // optional — only used for the WhatsApp renewal button
+    status:   '',   // e.g. 'Status'
+    category: '',   // e.g. 'Category' — NSO / Inter-IIT / Training / Beginner / Usual / Professional...
+    gender:   '',   // e.g. 'Gender' — Male / Female
   },
 
   /* ---- Gate PIN ----
