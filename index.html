@@ -939,13 +939,26 @@ function toCsvUrl(u){
   const gid=(u.match(/[#&?]gid=(\d+)/)||[])[1]||'0';
   return 'https://docs.google.com/spreadsheets/d/'+id+'/gviz/tq?tqx=out:csv&gid='+gid;
 }
+/* No sheet configured = no members, full stop. We deliberately WIPE the
+   cached copy rather than keep showing whatever this laptop last held —
+   otherwise a device that once synced test data would keep letting those
+   people in long after the data source was pulled. */
+function noSource(loud){
+  headers=[]; members=[]; index={}; map={};
+  [LS.rows, LS.hdr, LS.synced].forEach(k=>localStorage.removeItem(k));
+  paintStat(); renderMembers();
+  document.getElementById('liveDot').classList.remove('live');
+  document.getElementById('stat').innerHTML='<b style="color:var(--sun)">no sheet</b> · set config.js';
+  if(onScan()) renderDashboard();
+  if(document.getElementById('settingsView').classList.contains('on')) paintSettings();
+  if(loud) setMsg('settingsMsg','info','No Google Sheet configured yet — paste the share link into <code>SHEET_URL</code> in <code>config.js</code>.');
+}
 async function sync(loud){
+  if(!CONFIG.SHEET_URL) return noSource(loud);
   if(syncing) return;
   syncing=true;
   try{
-    // Falls back to a local data.csv when no Google Sheet is configured yet —
-    // set CONFIG.SHEET_URL once a real sheet exists and this switches over automatically.
-    const url = CONFIG.SHEET_URL ? toCsvUrl(CONFIG.SHEET_URL) : 'data.csv';
+    const url = toCsvUrl(CONFIG.SHEET_URL);
     const res=await fetch(url+(url.includes('?')?'&':'?')+'cb='+Date.now());
     if(!res.ok) throw new Error('HTTP '+res.status);
     const text=await res.text();
@@ -1057,48 +1070,6 @@ function computeEnd(m){
 
   const months = plan[amt];
   return months===0 ? paid : addMonths(paid, months);
-}
-
-/* ---------------- dev helpers (not linked from any button) ---------------- */
-function loadDemo(){
-  headers=['id','NAME','DATE','AMOUNT','CATEGORY','Status','Gender'];
-  const mk=(r,n,d,a,c,st,g)=>({'id':r,'NAME':n,'DATE':d,'AMOUNT':a,'CATEGORY':c,'Status':st,'Gender':g,'Phone':''});
-  const day=n=>{ const x=new Date(); x.setDate(x.getDate()+n); return fmtISO(x); };
-  members=[
-    mk('MS24BTECH11021','Ravi Kumar',day(-10),1200,'Student of IITH','Active','Male'),      // 3mo plan, mid-way
-    mk('CS23BTECH11004','Ananya Sharma',day(-58),500,'Student of IITH','Active','Female'),   // 1mo plan, expires very soon
-    mk('EE22BTECH11055','Imran Qureshi',day(-95),500,'Student of IITH','Active','Male'),     // 1mo plan, already expired
-    mk('ME24MTECH21007','Priya Nair',day(-20),3500,'Student of IITH','Active','Female'),     // annual
-    mk('BT23BTECH11090','Rohit Verma',day(-10),2000,'Faculty/Guest faculty/Staff/Project staff of IITH','Inactive','Male'),
-    mk('CH00COACH00001','Chandan',day(-30),6000,'Faculty/Guest faculty/Staff/Project staff of IITH','Active','Male'), // annual
-    mk('GUEST00001','Demo Guest',day(0),200,'Guest per slot','Active','Male'),                // single-day pass, today
-  ];
-  map=autoMap(headers,members);
-  buildIndex(); paintStat(); renderMembers();
-  if(onScan()) renderDashboard();
-  console.log('demo data loaded');
-}
-function seedDemoHistory(){
-  const out=[];
-  members.forEach((m,mi)=>{
-    const roll=val(m,'roll'), rate=[0.62,0.3,0.18,0.5,0.4,0.93][mi]||0.4;
-    for(let back=150; back>=0; back--){
-      const day=new Date(); day.setDate(day.getDate()-back);
-      if(day.getDay()===0) continue;
-      if(Math.random()>rate) continue;
-      const h=[6,7,17,18][Math.floor(Math.random()*4)];
-      day.setHours(h,Math.floor(Math.random()*59),0,0);
-      out.push({ts:day.toISOString(),roll:roll.toUpperCase(),name:val(m,'name'),verdict:'PAID'});
-      if(Math.random()<0.05){
-        const d2=new Date(day); d2.setHours(18,20,0,0);
-        out.push({ts:d2.toISOString(),roll:roll.toUpperCase(),name:val(m,'name'),verdict:'REPEAT'});
-      }
-    }
-  });
-  out.sort((a,b)=>new Date(b.ts)-new Date(a.ts));
-  log=out; localStorage.setItem(LS.log,JSON.stringify(log));
-  paintStat(); renderMembers(); renderLog();
-  return out.length+' demo scans seeded';
 }
 
 /* ---------------- helpers ---------------- */
