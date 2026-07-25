@@ -59,6 +59,15 @@ const CONFIG = {
     'guest per slot':                                      {200:0},
   },
 
+  /* ---- Grace period ----
+     Extra days a member may still swim after their plan has run out.
+     0 = expiry is enforced to the day (someone who paid on 10 June for
+     one month is turned away on 10 July). Set 2 or 3 if you'd rather the
+     gate stay friendly and let the office chase the renewal — they show
+     up as an amber "IN GRACE" card, never a green one, so the gatekeeper
+     always knows to mention it. */
+  GRACE_DAYS: 0,
+
   /* ---- Gate PIN ----
      Shared secret for the coach + gatekeeper. This is a deterrent, not
      encryption — anyone who views page source can read it. Its job is

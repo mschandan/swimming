@@ -259,7 +259,7 @@ code{font:600 12.5px var(--mono);background:var(--ink);padding:3px 7px;border-ra
       </svg>
     </div>
     <h3>Gate Staff Login</h3>
-    <div class="sub">Enter the 4-digit PIN shared with you by the coach</div>
+    <div class="sub">Enter the PIN shared with you by the coach</div>
     <input id="pinInput" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
     <div id="pinErr"></div>
     <button class="ghost" onclick="closeLock()">← Back</button>
@@ -437,7 +437,7 @@ const LS = { log:'pg_log', rows:'pg_rows', hdr:'pg_hdr', synced:'pg_synced', unl
 const SYNC_EVERY_MS    = 60000;
 const INACTIVE = ['inactive','cancelled','canceled','stopped','no','left','suspended','expired'];
 
-let headers=[], members=[], index={}, map={}, log=[], syncing=false;
+let headers=[], members=[], roster=[], index={}, map={}, log=[], syncing=null;
 
 /* ---------------- landing / PIN gate ---------------- */
 function paintLanding(){
@@ -458,11 +458,14 @@ function isUnlocked(){ return localStorage.getItem(LS.unlocked)==='1'; }
 function openLock(){
   document.getElementById('lockScreen').classList.add('on');
   const input=document.getElementById('pinInput');
+  const len = String(CONFIG.PIN||'').length || 4;   // follow config, don't assume 4 digits
+  input.maxLength = len;
+  input.placeholder = '•'.repeat(len);
   input.value=''; document.getElementById('pinErr').textContent='';
   setTimeout(()=>input.focus(),50);
   input.oninput=()=>{
     document.getElementById('pinErr').textContent='';
-    if(input.value.length===4){
+    if(input.value.length===len){
       if(input.value===CONFIG.PIN){
         localStorage.setItem(LS.unlocked,'1');
         document.getElementById('lockScreen').classList.remove('on');
@@ -529,14 +532,19 @@ async function lookup(raw, isRetry){
   audioUnlock();
   const key = norm(raw);
 
-  if(!members.length){
+  if(!roster.length){
     return popup('bad','NO DATA',{sub:'Sheet not loaded yet — check Settings', roll:raw});
   }
 
   const m = index[key];
   if(m) return verdict(m, raw);
 
-  const hits = members.filter(r=> val(r,'name').toLowerCase().includes(raw.toLowerCase()));
+  /* Not a roll number — fall back to matching a typed name. Guarded at 3
+     characters so a half-read barcode can't quietly admit a stranger who
+     happens to share those letters. */
+  const hits = raw.length>=3
+    ? roster.filter(r=> val(r,'name').toLowerCase().includes(raw.toLowerCase()))
+    : [];
   if(hits.length===1) return verdict(hits[0], raw);
   if(hits.length>1){
     beep('warn');
@@ -556,26 +564,26 @@ async function lookup(raw, isRetry){
 function verdict(m, raw){
   const name = val(m,'name') || '—';
   const roll = val(m,'roll') || raw;
-  const end  = computeEnd(m);
-  const stat = val(m,'status').toLowerCase().trim();
+  const st   = statusOf(m);
 
-  if(INACTIVE.includes(stat)){
+  if(st.state==='inactive'){
     beep('bad'); record(roll,name,'INACTIVE');
-    return popup('bad','NOT ACTIVE',{sub:'Sheet says <b>'+esc(val(m,'status'))+'</b>', roll, name, m});
+    return popup('bad','NOT ACTIVE',{sub:'Sheet says <b>'+esc(st.why)+'</b>', roll, name, m, st});
   }
-  if(!end){
+  if(st.state==='nodate'){
     beep('warn'); record(roll,name,'NO DATE');
-    return popup('warn','NO END DATE',{sub:'No expiry month in the sheet — check manually', roll, name, m});
+    return popup('warn','NO END DATE',{sub:'Can’t work out an expiry from this row — check manually', roll, name, m, st});
   }
-
-  const monthsLeft = monthsUntil(end);
-
-  if(monthsLeft < 0){
+  if(st.state==='expired'){
     beep('bad'); record(roll,name,'EXPIRED');
-    return popup('bad','EXPIRED',{sub:'Ended <b>'+monthLabel(end)+'</b> — send to office', roll, name, m, end, monthsLeft});
+    return popup('bad','EXPIRED',{
+      sub:'Ended <b>'+fmt(st.end)+'</b> — '+daysPhrase(st.days).toLowerCase()+' — send to office',
+      roll, name, m, st});
   }
 
-  const earlier = log.filter(e=> norm(e.roll)===norm(roll) && e.verdict==='PAID'
+  /* counts BOTH earlier verdicts, so the third scan says 3rd, not 2nd */
+  const earlier = log.filter(e=> norm(e.roll)===norm(roll)
+                              && (e.verdict==='PAID' || e.verdict==='REPEAT')
                               && sameDay(new Date(e.ts), new Date()));
   if(earlier.length){
     const first = earlier[earlier.length-1];
@@ -583,16 +591,22 @@ function verdict(m, raw){
     beep('warn'); record(roll,name,'REPEAT');
     return popup('warn', ordinal(earlier.length+1)+' ENTRY TODAY',{
       sub:'Already in at <b>'+time(new Date(first.ts))+'</b>'+(mins<90?' — '+mins+' min ago':''),
-      roll, name, m, end, monthsLeft});
+      roll, name, m, st});
   }
 
   record(roll,name,'PAID');
-  if(monthsLeft===0){
+  if(st.state==='grace'){
     beep('warn');
-    return popup('warn','EXPIRES THIS MONTH',{sub:'Renews/ends in <b>'+monthLabel(end)+'</b> — ask them to renew', roll, name, m, end, monthsLeft});
+    return popup('warn','GRACE PERIOD',{
+      sub:'Expired <b>'+fmt(st.end)+'</b> — let in on grace, but they must renew', roll, name, m, st});
+  }
+  if(st.state==='soon'){
+    beep('warn');
+    return popup('warn', st.days===0 ? 'LAST DAY' : 'EXPIRES IN '+st.days+' DAY'+(st.days===1?'':'S'),{
+      sub:'Valid through <b>'+fmt(st.end)+'</b> — ask them to renew', roll, name, m, st});
   }
   beep('ok');
-  popup('ok','PAID',{sub:'Entry logged', roll, name, m, end, monthsLeft});
+  popup('ok','PAID',{sub:'Entry logged', roll, name, m, st});
 }
 function ordinal(n){ const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
 
@@ -610,10 +624,9 @@ function popup(kind, big, opt){
 
   const rail = document.getElementById('vrail');
   const chips = [];
-  if(opt.end) chips.push([monthLabel(opt.end), 'Expires']);
-  if(opt.monthsLeft!=null){
-    chips.push([opt.monthsLeft<0?(-opt.monthsLeft)+' mo ago':opt.monthsLeft===0?'This month':opt.monthsLeft+' mo left', 'Time left']);
-  }
+  const st = opt.st;
+  if(st && st.end)        chips.push([fmt(st.end), 'Valid through']);
+  if(st && st.days!=null) chips.push([daysPhrase(st.days), 'Time left']);
   const cat = opt.m ? val(opt.m,'category') : '';
   if(cat) chips.push([cat, 'Category']);
   if(opt.roll){
@@ -635,33 +648,24 @@ function hidePopup(){ document.getElementById('verdictPopup').classList.remove('
 /* ---------------- home dashboard ---------------- */
 function renderDashboard(){
   const t = todayLog();
-  const active = members.filter(m=>{
-    const stat = val(m,'status').toLowerCase().trim();
-    if(INACTIVE.includes(stat)) return false;
-    const end = computeEnd(m);
-    return end && monthsUntil(end) >= 0;
-  });
-  const inToday = new Set(t.filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
-  const expiringThisMonth = members.filter(m=>{
-    const stat = val(m,'status').toLowerCase().trim();
-    if(INACTIVE.includes(stat)) return false;
-    const end = computeEnd(m);
-    return end && monthsUntil(end)===0;
-  }).length;
+  const active   = roster.filter(m=> statusOf(m).ok);
+  const inToday  = new Set(t.filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
+  const activeIn = active.filter(m=> inToday.has(norm(val(m,'roll')))).length;
+  const soon     = roster.filter(m=>{ const s=statusOf(m); return s.state==='soon'||s.state==='grace'; }).length;
 
   document.getElementById('dashTiles').innerHTML =
     tile(inToday.size,'Swimmers in','of '+active.length+' active members')+
     tile(t.filter(e=>kindOf(e.verdict)==='bad').length,'Turned away','expired or unknown today')+
-    tile(active.length - inToday.size,'Not in yet','active, haven’t scanned today')+
+    tile(Math.max(0, active.length - activeIn),'Not in yet','active, haven’t scanned today')+
     tile(busiestHour(t),'Busiest hour','across today')+
-    tile(expiringThisMonth,'Expiring this month','renew before month end');
+    tile(soon,'Expiring soon','within '+SOON_DAYS+' days');
 
   const feed = document.getElementById('feedTable');
   if(!log.length){ feed.innerHTML='<div class="empty">No scans yet today.</div>'; return; }
   feed.innerHTML = log.slice(0,12).map(e=>{
     const d=new Date(e.ts), k=kindOf(e.verdict);
     const dotColor = k==='ok'?'var(--aqua)':k==='bad'?'var(--coral)':'var(--sun)';
-    return '<div class="feedRow" onclick="openMember(\''+esc(e.roll)+'\')">'+
+    return '<div class="feedRow" onclick="openMember(\''+jsArg(e.roll)+'\')">'+
       '<span class="feedDot" style="background:'+dotColor+'"></span>'+
       '<div><div class="fname">'+esc(e.name||e.roll)+'</div><div class="froll">'+esc(e.roll)+' · '+esc(e.verdict)+'</div></div>'+
       '<span class="ftime">'+time(d)+'</span></div>';
@@ -693,6 +697,7 @@ function record(roll,name,v){
   log.unshift({ts:new Date().toISOString(), roll:String(roll).toUpperCase(), name, verdict:v});
   if(log.length>20000) log.length=20000;
   localStorage.setItem(LS.log, JSON.stringify(log));
+  invalidateVisits();
   paintStat();
 }
 function todayLog(){ return log.filter(e=>sameDay(new Date(e.ts), new Date())); }
@@ -720,7 +725,7 @@ function renderLog(){
   box.innerHTML = '<table><tr><th>Time</th><th>Roll no</th><th>Name</th><th>Result</th></tr>'+
     log.slice(0,400).map(e=>{
       const d=new Date(e.ts);
-      return '<tr class="click" onclick="openMember(\''+esc(e.roll)+'\')">'+
+      return '<tr class="click" onclick="openMember(\''+jsArg(e.roll)+'\')">'+
         '<td class="mono">'+fmt(d)+' · '+time(d)+'</td>'+
         '<td class="mono">'+esc(e.roll)+'</td><td>'+esc(e.name||'—')+'</td>'+
         '<td><span class="pill '+kindOf(e.verdict)+'">'+esc(e.verdict)+'</span></td></tr>';
@@ -742,22 +747,30 @@ function exportLog(){
 }
 function clearLog(){
   if(!confirm('Delete all '+log.length+' logged scans from this laptop?\n\nAttendance calendars and session counts are built from this history — download the CSV first.')) return;
-  log=[]; localStorage.setItem(LS.log,'[]'); renderLog(); paintStat();
+  log=[]; localStorage.setItem(LS.log,'[]'); invalidateVisits(); renderLog(); paintStat();
 }
 
 /* =====================================================================
    ATTENDANCE — a "session" = a day with a PAID scan.
    ===================================================================== */
-function visitsFor(roll){
-  const key=norm(roll), out={};
+/* The members table asks for every member's history on every render, and
+   re-renders on each sync, search keystroke and scan. Walking the whole
+   log per member was O(members × scans); this walks it once and caches
+   until the log actually changes. */
+let visitCache=null;
+function invalidateVisits(){ visitCache=null; }
+function visitMap(){
+  if(visitCache) return visitCache;
+  visitCache={};
   log.forEach(e=>{
-    if(norm(e.roll)!==key) return;
     if(e.verdict!=='PAID' && e.verdict!=='REPEAT') return;
-    const d=fmtISO(new Date(e.ts));
-    out[d]=(out[d]||0)+1;
+    const k=norm(e.roll), d=fmtISO(new Date(e.ts));
+    (visitCache[k] = visitCache[k] || {});
+    visitCache[k][d]=(visitCache[k][d]||0)+1;
   });
-  return out;
+  return visitCache;
 }
+function visitsFor(roll){ return visitMap()[norm(roll)] || {}; }
 function statsFor(roll){
   const v=visitsFor(roll);
   const days=Object.keys(v).sort();
@@ -792,16 +805,8 @@ let currentRoll=null;
 function openMember(roll){
   currentRoll=roll;
   const m=index[norm(roll)], s=statsFor(roll);
-  const end=m?computeEnd(m):null;
-  const monthsLeft=end?monthsUntil(end):null;
-
-  let k='warn', label='NO END DATE';
-  if(m && INACTIVE.includes(val(m,'status').toLowerCase().trim())){ k='bad'; label='NOT ACTIVE'; }
-  else if(monthsLeft!==null){
-    if(monthsLeft<0){ k='bad'; label='EXPIRED'; }
-    else if(monthsLeft===0){ k='warn'; label='EXPIRES THIS MONTH'; }
-    else { k='ok'; label=monthsLeft+' MO LEFT'; }
-  }
+  const st=statusOf(m);
+  const end=st.end;
   const phone=m?val(m,'phone'):'';
   const category=m?val(m,'category'):'';
   const gender=m?val(m,'gender'):'';
@@ -815,11 +820,12 @@ function openMember(roll){
         (tags.length?'<div class="row" style="margin-top:10px">'+tags.map(t=>'<span class="pill" style="border-color:var(--line);color:var(--dim)">'+esc(t)+'</span>').join('')+'</div>':'')+
       '</div>'+
       '<div class="spacer"></div>'+
-      '<span class="pill '+k+'" style="font-size:12px;padding:6px 14px">'+label+'</span>'+
+      '<span class="pill '+st.kind+'" style="font-size:12px;padding:6px 14px">'+st.label+'</span>'+
     '</div>'+
     (end ? '<div class="card"><label>Subscription</label>'+
-      '<div class="sub" style="margin:0">Expires <b style="color:var(--txt)">'+monthLabel(end)+'</b>'+
-      (monthsLeft>0?' — '+monthsLeft+' month'+(monthsLeft===1?'':'s')+' left':monthsLeft===0?' — this month':' — expired')+'</div></div>' : '')+
+      '<div class="sub" style="margin:0">Valid through <b style="color:var(--txt)">'+fmt(end)+'</b> — '+
+      (st.days<0?daysPhrase(st.days):st.days===0?'today is the last day':daysPhrase(st.days)+' left')+'</div></div>' : '')+
+    payments(m)+
     '<div class="tiles">'+
       tile(s.total,'Total sessions', s.first?('since '+fmt(parseDate(s.first))):'no visits yet')+
       tile(s.month,'This month','')+
@@ -844,6 +850,24 @@ function openMember(roll){
 }
 function tile(n,l,s){
   return '<div class="tile"><div class="n">'+n+'</div><div class="l">'+l+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
+}
+/* Every payment row behind this person, and what each one bought — so a
+   disputed expiry can be traced back through the renewals that built it. */
+function payments(m){
+  const rows = m && m.__rows ? m.__rows : [];
+  if(rows.length<2 && !rows.some(r=>planMonths(r)===null)) return '';
+  return '<div class="card"><label>Payment history</label>'+
+    '<div class="sub" style="margin:-4px 0 12px">'+rows.length+' payment'+(rows.length===1?'':'s')+' — renewals bought while still active extend the previous period</div>'+
+    '<table><tr><th>Paid on</th><th>Amount</th><th>Category</th><th>Buys</th></tr>'+
+    rows.map(r=>{
+      const paid=parseDate(val(r,'paymentDate')), mo=planMonths(r);
+      const buys = mo===null ? '<span class="pill bad">UNKNOWN TIER</span>'
+                 : mo===0    ? 'Day pass'
+                 : mo+' month'+(mo===1?'':'s');
+      return '<tr><td class="mono">'+(paid?fmt(paid):esc(val(r,'paymentDate')||'—'))+'</td>'+
+        '<td class="mono">'+esc(val(r,'amount')||'—')+'</td>'+
+        '<td>'+esc(val(r,'category')||'—')+'</td><td>'+buys+'</td></tr>';
+    }).join('')+'</table></div>';
 }
 function calendar(visits,end){
   const out=[], now=new Date(), todayISO=fmtISO(now);
@@ -882,50 +906,44 @@ function waRemind(){
 function renderMembers(){
   const q=(document.getElementById('memberSearch').value||'').toLowerCase();
   const box=document.getElementById('memberTable');
+  const extra = members.length>roster.length ? ' · '+members.length+' payment rows' : '';
   document.getElementById('adminSub').textContent =
-    members.length ? members.length+' members · not-in-yet first, then who expires soonest' : 'Nothing loaded yet';
-  if(!members.length){ box.innerHTML='<div class="empty">Nothing loaded.</div>'; return; }
+    roster.length ? roster.length+' members'+extra+' · not-in-yet first, then who expires soonest' : 'Nothing loaded yet';
+  if(!roster.length){ box.innerHTML='<div class="empty">Nothing loaded.</div>'; return; }
 
   const todayRolls = new Set(todayLog().filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
-  const rows=members.filter(m=>!q || (val(m,'name')+' '+val(m,'roll')).toLowerCase().includes(q)).map(m=>{
-    const end=computeEnd(m);
-    const monthsLeft=end?monthsUntil(end):null;
-    const inactive = INACTIVE.includes(val(m,'status').toLowerCase().trim());
-    let k='warn', label='NO DATE';
-    if(inactive){ k='bad'; label='NOT ACTIVE'; }
-    else if(monthsLeft!==null){
-      if(monthsLeft<0){ k='bad'; label='EXPIRED'; }
-      else if(monthsLeft===0){ k='warn'; label='THIS MONTH'; }
-      else { k='ok'; label='PAID'; }
-    }
-    const camToday = todayRolls.has(norm(val(m,'roll')));
-    const eligible = !inactive && monthsLeft!==null && monthsLeft>=0;
-    return {m,end,monthsLeft,k,label,camToday,eligible};
+  const rows=roster.filter(m=>!q || (val(m,'name')+' '+val(m,'roll')).toLowerCase().includes(q)).map(m=>{
+    const st = statusOf(m);
+    return {m, st, camToday: todayRolls.has(norm(val(m,'roll'))), eligible: st.ok};
   }).sort((a,b)=>{
     if(a.eligible && b.eligible && a.camToday!==b.camToday) return a.camToday? -1:1;
-    return (a.monthsLeft===null?9e9:a.monthsLeft)-(b.monthsLeft===null?9e9:b.monthsLeft);
+    return (a.st.days===null?9e9:a.st.days)-(b.st.days===null?9e9:b.st.days);
   });
 
-  box.innerHTML='<table><tr><th>Roll no</th><th>Name</th><th>Category</th><th>Gender</th><th>Expires</th><th>Sessions</th><th>Last visit</th><th>Today</th><th>Status</th></tr>'+
+  box.innerHTML='<table><tr><th>Roll no</th><th>Name</th><th>Category</th><th>Gender</th><th>Valid through</th><th>Payments</th><th>Sessions</th><th>Last visit</th><th>Today</th><th>Status</th></tr>'+
     rows.map(r=>{
       const s=statsFor(val(r.m,'roll'));
       const rowTint = !r.eligible ? '' : r.camToday ? 'background:rgba(0,229,138,.05)' : 'background:rgba(255,77,94,.045)';
       const today = !r.eligible ? '<span style="color:var(--faint)">—</span>'
         : r.camToday ? '<span class="pill ok">IN</span>' : '<span class="pill bad">NOT IN</span>';
-      return '<tr class="click" style="'+rowTint+'" onclick="openMember(\''+esc(val(r.m,'roll'))+'\')">'+
+      const n = (r.m.__rows||[]).length;
+      return '<tr class="click" style="'+rowTint+'" onclick="openMember(\''+jsArg(val(r.m,'roll'))+'\')">'+
         '<td class="mono">'+esc(val(r.m,'roll'))+'</td><td>'+esc(val(r.m,'name'))+'</td>'+
         '<td>'+esc(val(r.m,'category')||'—')+'</td><td>'+esc(val(r.m,'gender')||'—')+'</td>'+
-        '<td class="mono">'+(r.end?monthLabel(r.end):'—')+'</td>'+
+        '<td class="mono">'+(r.st.end?fmt(r.st.end):'—')+'</td>'+
+        '<td class="mono">'+(n>1?n+' <span style="color:var(--faint)">renewed</span>':'1')+'</td>'+
         '<td class="mono">'+(s.total||'—')+(s.total?' <span style="color:var(--faint)">('+s.month+' this mo)</span>':'')+'</td>'+
         '<td class="mono">'+s.lastLabel+'</td>'+
         '<td>'+today+'</td>'+
-        '<td><span class="pill '+r.k+'">'+r.label+'</span></td></tr>';
+        '<td><span class="pill '+r.st.kind+'">'+r.st.label+'</span></td></tr>';
     }).join('')+'</table>';
 }
 
 /* ---------------- settings ---------------- */
 function paintSettings(){
-  document.getElementById('setMembers').textContent = members.length ? members.length+' loaded' : 'none loaded';
+  document.getElementById('setMembers').textContent = roster.length
+    ? roster.length+' loaded'+(members.length>roster.length ? ' (from '+members.length+' payment rows)' : '')
+    : 'none loaded';
   const s=localStorage.getItem(LS.synced);
   document.getElementById('setSynced').textContent = s ? fmt(new Date(s))+' · '+time(new Date(s)) : 'never';
 }
@@ -944,7 +962,7 @@ function toCsvUrl(u){
    otherwise a device that once synced test data would keep letting those
    people in long after the data source was pulled. */
 function noSource(loud){
-  headers=[]; members=[]; index={}; map={};
+  headers=[]; members=[]; roster=[]; index={}; map={};
   [LS.rows, LS.hdr, LS.synced].forEach(k=>localStorage.removeItem(k));
   paintStat(); renderMembers();
   document.getElementById('liveDot').classList.remove('live');
@@ -953,10 +971,18 @@ function noSource(loud){
   if(document.getElementById('settingsView').classList.contains('on')) paintSettings();
   if(loud) setMsg('settingsMsg','info','No Google Sheet configured yet — paste the share link into <code>SHEET_URL</code> in <code>config.js</code>.');
 }
-async function sync(loud){
-  if(!CONFIG.SHEET_URL) return noSource(loud);
-  if(syncing) return;
-  syncing=true;
+/* A miss at the gate re-syncs and retries before saying NOT REGISTERED.
+   That only helps if it waits for the fetch actually in flight — an
+   early return would hand the retry the same stale list it just missed
+   on, so concurrent callers share one promise instead. */
+function sync(loud){
+  if(!CONFIG.SHEET_URL){ noSource(loud); return Promise.resolve(); }
+  if(syncing) return syncing;
+  syncing = doSync(loud);
+  syncing.catch(()=>{}).then(()=>{ syncing=null; });
+  return syncing;
+}
+async function doSync(loud){
   try{
     const url = toCsvUrl(CONFIG.SHEET_URL);
     const res=await fetch(url+(url.includes('?')?'&':'?')+'cb='+Date.now());
@@ -978,21 +1004,44 @@ async function sync(loud){
 
     buildIndex(); paintStat(); renderMembers(); if(onScan()) renderDashboard();
     if(document.getElementById('settingsView').classList.contains('on')) paintSettings();
-    if(loud) setMsg('settingsMsg','good','Synced — '+members.length+' members loaded.');
+    if(loud) setMsg('settingsMsg','good','Synced — '+roster.length+' members from '+members.length+' payment rows.');
   }catch(err){
     document.getElementById('liveDot').classList.remove('live');
     if(loud) setMsg('settingsMsg','err','Sync failed: '+esc(err.message));
     else document.getElementById('stat').innerHTML='<b style="color:var(--coral)">sync failed</b> · last copy';
-  }finally{ syncing=false; }
+  }
 }
+/* One person is many rows: a row per payment, renewals piling up over
+   months. `members` stays the raw sheet; `roster` is one record per
+   person — the newest row's details, plus __rows (their whole payment
+   history) and __end (the chained expiry). Everything the gate and the
+   screens read goes through roster/index, never the raw rows, so a
+   renewal added anywhere in the sheet counts the same. */
 function buildIndex(){
-  index={};
-  members.forEach(m=>{ const k=norm(val(m,'roll')); if(k) index[k]=m; });
+  index={}; roster=[];
+  const groups={};
+  members.forEach(m=>{
+    const k=norm(val(m,'roll'));
+    if(!k) return;
+    (groups[k] = groups[k] || []).push(m);
+  });
+  Object.keys(groups).forEach(k=>{
+    const rows = groups[k].slice().sort((a,b)=>{
+      const pa=parseDate(val(a,'paymentDate')), pb=parseDate(val(b,'paymentDate'));
+      if(pa&&pb) return pa-pb;
+      return pa ? -1 : pb ? 1 : 0;      // undated rows first, they can't anchor a chain
+    });
+    const rec = Object.assign({}, rows[rows.length-1]);   // newest row supplies name/category/phone
+    rec.__rows = rows;
+    rec.__end  = chainEnd(rows);
+    index[k]   = rec;
+    roster.push(rec);
+  });
 }
 function paintStat(){
   const s=localStorage.getItem(LS.synced);
-  document.getElementById('stat').innerHTML='<b>'+members.length+'</b> members · '+(s?time(new Date(s)):'—');
-  document.getElementById('liveDot').classList.toggle('live', members.length>0);
+  document.getElementById('stat').innerHTML='<b>'+roster.length+'</b> members · '+(s?time(new Date(s)):'—');
+  document.getElementById('liveDot').classList.toggle('live', roster.length>0);
   const n=todayLog().filter(e=>e.verdict==='PAID').length;
   document.getElementById('logCount').innerHTML = n?'<span class="badge">'+n+'</span>':'';
 }
@@ -1004,9 +1053,16 @@ function resolveMap(hdrs, rows){
   const auto = autoMap(hdrs, rows);
   const out = {};
   ['roll','name','end','start','phone','status','category','gender','paymentDate','amount'].forEach(k=>{
-    out[k] = (cfg[k] && hdrs.includes(cfg[k])) ? cfg[k] : auto[k];
+    out[k] = (cfg[k] && matchHeader(hdrs, cfg[k])) || auto[k];
   });
   return out;
+}
+/* Config names are matched loosely on purpose: 'id' should find a column
+   headed 'ID' or 'id '. Exact matching meant a stray capital silently
+   fell through to auto-detection and hid the typo. */
+function matchHeader(hdrs, want){
+  const w = String(want).toLowerCase().trim();
+  return hdrs.find(h=>h.toLowerCase().trim()===w) || '';
 }
 function autoMap(hdrs,rows){
   const m={}, sample=rows.slice(0,40);
@@ -1039,37 +1095,134 @@ function pick(hdrs,wants){
 function val(m,key){ return (map[key] && m[map[key]]!=null) ? String(m[map[key]]) : ''; }
 
 /* =====================================================================
-   EXPIRY — computed, not read.
-   Most sheets don't carry an expiry date at all: just who paid, when,
-   how much, and what category. The actual plan length (1/3/6/12 months,
-   or a single-day guest slot) is looked up from CONFIG.PLANS, keyed by
-   category then exact amount paid. If a column called 'end' exists AND
-   has a value for that row, it always wins — lets a sheet override any
-   individual member by hand. If the amount doesn't match any known
-   price for that category, we deliberately return null rather than
-   guess — a wrong guess either locks out someone who paid or lets
-   someone in for free; null instead falls through to the existing
-   "NO END DATE — check manually" state everywhere it's used.         */
+   EXPIRY — computed to the DAY, and chained across renewals.
+
+   The sheet doesn't carry an expiry date: just who paid, when, how much,
+   and what category. Plan length (1/3/6/12 months, or a single-day guest
+   slot) comes from CONFIG.PLANS, keyed by category then exact amount.
+
+   Two rules that matter, both of them things a month-granular version
+   used to get wrong:
+
+   1. DAY PRECISION. A one-month plan bought on 10 June runs 10 June to
+      9 July inclusive — not "all of July". `end` below is always the
+      LAST DAY the member may swim, and every check compares whole days,
+      never months. CONFIG.GRACE_DAYS buys back a few days past that if
+      the pool wants to be lenient.
+
+   2. RENEWALS CHAIN. One person = many rows over time. Rows are sorted
+      by payment date and each period starts either on its payment date
+      or the day after the previous period ended, whichever is later. So
+      renewing early adds time on top instead of throwing away the days
+      already paid for; renewing after a lapse simply starts fresh. Guest
+      day-passes never chain — they're one day, standalone.
+
+   If the amount doesn't match a known price for that category we return
+   null rather than guess: a wrong guess either locks out someone who
+   paid or lets someone in free. Null surfaces as "NO END DATE — check
+   manually" instead. An explicit expiry column, if the sheet ever grows
+   one, always overrides the whole calculation.
+   ===================================================================== */
 function addMonths(d, n){
   const y = d.getFullYear(), m = d.getMonth()+n;
   const ny = y + Math.floor(m/12), nm = ((m%12)+12)%12;
   const lastDay = new Date(ny, nm+1, 0).getDate();
   return new Date(ny, nm, Math.min(d.getDate(), lastDay));
 }
-function computeEnd(m){
-  const explicit = parseDate(val(m,'end'));
-  if(explicit) return explicit;
+function addDays(d,n){ const x=midnight(d); x.setDate(x.getDate()+n); return x; }
+function lastDayOf(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
 
-  const paid = parseDate(val(m,'paymentDate'));
-  const amt  = parseFloat(String(val(m,'amount')).replace(/[^\d.]/g,''));
-  const cat  = val(m,'category').toLowerCase().trim();
-  if(!paid || isNaN(amt) || !cat) return null;
+/* An expiry written by hand can be month-only ("July", "Aug 2026"). A
+   member is not expired half way through the month they were given, so
+   a month-only expiry means the LAST day of that month. */
+function parseEnd(s){
+  const p = parseDateP(s);
+  if(!p) return null;
+  return p.monthOnly ? lastDayOf(p.d) : midnight(p.d);
+}
 
+/* months of access this row buys — 0 = single-day pass, null = unknown */
+function planMonths(m){
+  const amt = parseFloat(String(val(m,'amount')).replace(/[^\d.]/g,''));
+  const cat = val(m,'category').toLowerCase().trim();
+  if(isNaN(amt) || !cat) return null;
   const plan = (CONFIG.PLANS||{})[cat];
   if(!plan || plan[amt]==null) return null;
+  return plan[amt];
+}
 
-  const months = plan[amt];
-  return months===0 ? paid : addMonths(paid, months);
+/* one row on its own, ignoring any other rows for the same person */
+function rowEnd(m){
+  if(!m) return null;
+  const explicit = parseEnd(val(m,'end'));
+  if(explicit) return explicit;
+  const paid   = parseDate(val(m,'paymentDate'));
+  const months = planMonths(m);
+  if(!paid || months===null) return null;
+  return months===0 ? midnight(paid) : addDays(addMonths(midnight(paid), months), -1);
+}
+
+/* every row for one person, oldest payment first → last valid day */
+function chainEnd(rows){
+  let end = null;
+  rows.forEach(r=>{
+    const explicit = parseEnd(val(r,'end'));
+    if(explicit){ if(!end || explicit>end) end = explicit; return; }
+
+    const paid   = parseDate(val(r,'paymentDate'));
+    const months = planMonths(r);
+    if(!paid || months===null) return;          // unreadable row — skip, don't guess
+
+    if(months===0){                             // guest day pass: that day only, no chaining
+      const one = midnight(paid);
+      if(!end || one>end) end = one;
+      return;
+    }
+    // renewed while still valid? start the day after the current period ends
+    const from = (end && end >= midnight(paid)) ? addDays(end,1) : midnight(paid);
+    const e    = addDays(addMonths(from, months), -1);
+    if(!end || e>end) end = e;
+  });
+  return end;
+}
+
+/* Index records carry their chained expiry on __end. A bare row (no
+   chain built yet) falls back to being read on its own. */
+function computeEnd(m){ return (m && '__end' in m) ? m.__end : rowEnd(m); }
+
+/* whole days from today to the last valid day: 0 = today IS the last day */
+function daysLeft(end){ return Math.round((midnight(end) - midnight(new Date()))/86400000); }
+
+/* =====================================================================
+   STATUS — the single source of truth for "can this person swim?".
+   Scanner, members table, profile and dashboard all call this, so a
+   change to the rule changes every screen at once.
+   ===================================================================== */
+const SOON_DAYS = 7;   // how far ahead to start nudging people to renew
+function statusOf(m){
+  if(!m) return {state:'nodate', kind:'warn', label:'NO END DATE', end:null, days:null, ok:false};
+
+  const raw = val(m,'status').toLowerCase().trim();
+  if(INACTIVE.includes(raw))
+    return {state:'inactive', kind:'bad', label:'NOT ACTIVE', end:null, days:null, ok:false, why:val(m,'status')};
+
+  const end = computeEnd(m);
+  if(!end) return {state:'nodate', kind:'warn', label:'NO END DATE', end:null, days:null, ok:false};
+
+  const days  = daysLeft(end);
+  const grace = Math.max(0, +(CONFIG.GRACE_DAYS||0));
+
+  if(days < -grace)   return {state:'expired', kind:'bad',  label:'EXPIRED',   end, days, ok:false};
+  if(days < 0)        return {state:'grace',   kind:'warn', label:'IN GRACE',  end, days, ok:true};
+  if(days === 0)      return {state:'soon',    kind:'warn', label:'LAST DAY',  end, days, ok:true};
+  if(days <= SOON_DAYS)
+    return {state:'soon', kind:'warn', label:days+' DAY'+(days===1?'':'S')+' LEFT', end, days, ok:true};
+  return {state:'ok', kind:'ok', label:'PAID', end, days, ok:true};
+}
+function daysPhrase(d){
+  if(d < 0)  return (-d)+' day'+(d===-1?'':'s')+' over';
+  if(d === 0) return 'Last day';
+  return d+' day'+(d===1?'':'s');
 }
 
 /* ---------------- helpers ---------------- */
@@ -1081,53 +1234,56 @@ function fmt(d){ return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear(); }
 function fmtISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function time(d){ let h=d.getHours(); const ap=h<12?'AM':'PM'; h=h%12||12;
   return h+':'+String(d.getMinutes()).padStart(2,'0')+' '+ap; }
-/* Members' sheets rarely carry exact dates — usually just "the month it
-   ends" (July, Aug 2026, 2026-09...). This parser accepts exact dates
-   AND bare months; either way, status logic below only ever looks at
-   month+year, never the day, since that's the real precision we have. */
+/* Real sheets are written by hand, so this has to survive 08/07/2026,
+   08-06-2026, 15.07.2026, 16:07:2026, 21\7\26, 11-07-26, 10 July 2026,
+   22-July-2026 and a bare "July".
+
+   Returns {d, monthOnly}: monthOnly flags the values where only a month
+   was ever written, so callers can decide what a month means for them
+   (an expiry that says "July" means the 31st, not the 1st). parseDate()
+   is the plain-Date wrapper for everything that doesn't care. */
 const MONTH_NAMES = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11,
   jan:0,feb:1,mar:2,apr:3,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
-function parseDate(s){
+function parseDateP(s){
   if(!s) return null;
   s=String(s).trim(); if(!s) return null;
-  s=s.replace(/[\\:]/g,'-');   // real sheets show up with "16:07:2026" and "21\7\26" — treat like any other separator
+  s=s.replace(/[\\:]/g,'-');   // "16:07:2026" and "21\7\26" — treat like any other separator
 
   let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(m) return new Date(+m[1],+m[2]-1,+m[3]);
+  if(m) return {d:new Date(+m[1],+m[2]-1,+m[3]), monthOnly:false};
 
   m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if(m){
     let a=+m[1], b=+m[2], y=+m[3]; if(y<100) y+=2000;
-    if(b>12 && a<=12){ const t=a; a=b; b=t; }
-    return new Date(y,b-1,a);
+    if(b>12 && a<=12){ const t=a; a=b; b=t; }   // day/month written the wrong way round
+    return {d:new Date(y,b-1,a), monthOnly:false};
   }
 
+  /* a written-out month, with or without a day in front of it */
   const nameMatch = s.toLowerCase().match(/[a-z]+/);
   if(nameMatch && MONTH_NAMES.hasOwnProperty(nameMatch[0])){
     const mo = MONTH_NAMES[nameMatch[0]];
     const yMatch = s.match(/(\d{4})/);
     const yr = yMatch ? +yMatch[1] : new Date().getFullYear();
-    return new Date(yr, mo, 1);
+    // whatever 1–2 digit number is left once the 4-digit year is out of the way is the day
+    const dMatch = s.replace(/\d{4}/g,' ').match(/(\d{1,2})/);
+    if(dMatch && +dMatch[1]>=1 && +dMatch[1]<=31)
+      return {d:new Date(yr, mo, +dMatch[1]), monthOnly:false};
+    return {d:new Date(yr, mo, 1), monthOnly:true};
   }
 
   m=s.match(/^(\d{1,2})[\/\-](\d{4})$/);
-  if(m) return new Date(+m[2], +m[1]-1, 1);
+  if(m) return {d:new Date(+m[2], +m[1]-1, 1), monthOnly:true};
   m=s.match(/^(\d{4})[\/\-](\d{1,2})$/);
-  if(m) return new Date(+m[1], +m[2]-1, 1);
+  if(m) return {d:new Date(+m[1], +m[2]-1, 1), monthOnly:true};
 
   m=s.match(/^(\d{1,2})$/);
-  if(m && +m[1]>=1 && +m[1]<=12) return new Date(new Date().getFullYear(), +m[1]-1, 1);
+  if(m && +m[1]>=1 && +m[1]<=12) return {d:new Date(new Date().getFullYear(), +m[1]-1, 1), monthOnly:true};
 
   const t=Date.parse(s);
-  return isNaN(t)?null:new Date(t);
+  return isNaN(t)?null:{d:new Date(t), monthOnly:false};
 }
-/* Status is always month-granularity: 0 = expires this month, negative =
-   already past, positive = that many months still ahead. */
-function monthsUntil(d){
-  const now=new Date();
-  return (d.getFullYear()-now.getFullYear())*12 + (d.getMonth()-now.getMonth());
-}
-function monthLabel(d){ return MON[d.getMonth()]+' '+d.getFullYear(); }
+function parseDate(s){ const p=parseDateP(s); return p?p.d:null; }
 function parseCSV(text){
   const rows=[]; let row=[],cell='',q=false;
   text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
@@ -1153,6 +1309,13 @@ function download(name,text){
   a.download=name; a.click(); URL.revokeObjectURL(a.href);
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* For a value going inside onclick="fn('…')". esc() alone is not enough:
+   it turns ' into &#39;, which the HTML parser decodes back to a real
+   quote before the JS ever runs, breaking out of the string. \xNN
+   escapes survive that round trip intact. */
+function jsArg(s){
+  return esc(String(s==null?'':s).replace(/[\\'"]/g, c=>'\\x'+c.charCodeAt(0).toString(16)));
+}
 function setMsg(id,kind,html){ const el=document.getElementById(id); if(el) el.innerHTML='<div class="msg '+kind+'">'+html+'</div>'; }
 
 /* ---------------- boot ---------------- */

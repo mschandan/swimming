@@ -27,12 +27,27 @@ It also **retries on a miss**: if a scanned card isn't found, the app re-pulls t
 
 ```js
 SHEET_URL: '...'          // the sheet's normal Share link
-COLUMNS: { roll, name, end, start, phone, status }   // exact header text from row 1
+COLUMNS: { roll, name, paymentDate, amount, category, end, phone, status, gender }
+PLANS:   { 'category': { amount: months } }   // the fee table — see below
+GRACE_DAYS: 0              // extra days allowed after expiry (0 = enforce to the day)
 PIN: '1234'                // shared with coach + gatekeeper only
 SITE: { poolName, tagline, location, timings, contact, renewNote }  // public landing page copy
 ```
 
-The sheet must be shared as **Anyone with the link → Viewer**. If a column name in `COLUMNS` is left blank or turns out wrong, the app falls back to guessing the roll-number column by data shape (`ms24btech11021`-style patterns) and other columns by common header names — so a typo doesn't silently break scanning, it just falls back to best-guess.
+The sheet must be shared as **Anyone with the link → Viewer**. Column names are matched case- and space-insensitively; if one is left blank or turns out wrong, the app falls back to guessing the roll-number column by data shape (`ms24btech11021`-style patterns) and other columns by common header names — so a typo doesn't silently break scanning.
+
+## How expiry is worked out
+
+The sheet records **payments**, not expiry dates: who paid, when, how much, what category. The app derives the rest.
+
+- **Plan length** comes from `PLANS`, keyed by category then the exact amount paid. ₹500 as a student = 1 month; ₹200 guest = a single-day pass. An amount that matches no tier gives **NO END DATE — check manually**, never a guess: guessing either locks out someone who paid or lets someone in free.
+- **Expiry is a date, not a month.** Paid ₹500 on 10 June ⇒ valid 10 June through 9 July. On 10 July they're expired, not "expired at the end of July". `GRACE_DAYS` buys back a few days if the pool prefers to be lenient — those show as an amber **IN GRACE** card, never a green one.
+- **Renewals chain.** One person is many rows, one per payment. Rows are sorted by payment date and each period starts either on its payment date or the day after the previous one ended, whichever is later — so renewing early *adds* time instead of throwing away days already paid for, and renewing after a lapse simply starts fresh. Row order in the sheet doesn't matter. Guest day-passes never chain.
+- **An explicit expiry column wins.** If the sheet ever grows one (map it to `end`), a value there overrides the whole calculation for that row — the hand-override hatch. A month-only value there ("August 2026") means the *last* day of that month.
+
+A member's profile shows their full payment history and what each payment bought, so a disputed expiry can be traced.
+
+`node tests/expiry.test.js` runs 57 assertions over all of the above — date formats, tiers, renewal chains, grace, overrides. Run it after touching any of that logic.
 
 ## Daily use (gatekeeper)
 
@@ -41,10 +56,11 @@ Once the device is unlocked, it opens straight to **Scan** — no landing page, 
 | Verdict | Meaning |
 |---|---|
 | ✔ **PAID** (green) | Valid subscription, entry logged |
-| ! **EXPIRING SOON** (amber) | Valid, but ≤7 days left — remind them to renew |
+| ! **EXPIRES IN N DAYS** / **LAST DAY** (amber) | Valid, but ≤7 days left — remind them to renew |
+| ! **GRACE PERIOD** (amber) | Expired, but inside `GRACE_DAYS` — let in, must renew |
 | ! **2ND ENTRY TODAY** (amber) | Already came in today — shows the earlier time. Guard decides. |
-| ! **NO END DATE** (amber) | Sheet has no expiry date for them — check manually |
-| ✕ **EXPIRED** (red) | Plan ended — send to office |
+| ! **NO END DATE** (amber) | Can't work out an expiry from their row — check manually |
+| ✕ **EXPIRED** (red) | Plan ended, shows the date and how many days over — send to office |
 | ✕ **NOT ACTIVE** (red) | Status column says inactive/cancelled |
 | ✕ **NOT REGISTERED** (red) | Card not in the sheet |
 
@@ -53,7 +69,7 @@ Each verdict has its own sound, so the guard doesn't need to watch the screen. I
 ## Member profiles
 
 Click any row in **Members** or **Today's log**:
-- Subscription progress bar, days left
+- Valid-through date and days left, plus the full payment history behind it
 - Total sessions, this month, last 30 days, average per week, days since last visit, week streak
 - **6-month attendance calendar** — green = came, cyan = scanned twice, dark blue = subscribed but didn't come
 - One-click WhatsApp renewal message, pre-written
