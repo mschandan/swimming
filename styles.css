@@ -86,11 +86,65 @@ h1, h2, h3, h4 {
 }
 
 .nav-contact {
-    text-align: right;
+    position: relative;
 }
 
-.contact-label {
-    display: block;
+.contact-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.contact-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.contact-chevron {
+    transition: transform 0.2s ease;
+}
+
+.contact-btn[aria-expanded="true"] .contact-chevron {
+    transform: rotate(180deg);
+}
+
+.contact-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transition: all 0.2s ease;
+    z-index: 200;
+    white-space: nowrap;
+}
+
+.contact-dropdown.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.contact-dropdown-label {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -98,10 +152,15 @@ h1, h2, h3, h4 {
     font-weight: 600;
 }
 
-.contact-number {
-    font-size: 0.85rem;
-    font-weight: 600;
+.contact-dropdown .contact-number {
+    font-size: 0.9rem;
+    font-weight: 700;
     color: var(--primary-dark);
+    text-decoration: none;
+}
+
+.contact-dropdown .contact-number:hover {
+    text-decoration: underline;
 }
 
 /* Hero Banner */
@@ -918,10 +977,18 @@ h1, h2, h3, h4 {
 }
 
 .rules-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     font-size: 1.05rem;
     font-weight: 700;
     margin-bottom: 0.75rem;
     color: var(--text-heading);
+}
+
+.rule-icon {
+    flex-shrink: 0;
+    color: var(--primary);
 }
 
 .rules-section ul {
@@ -1014,13 +1081,21 @@ h1, h2, h3, h4 {
     .navbar {
         padding: 0.75rem 0;
     }
-    .nav-content {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
+    .brand-text h1 {
+        font-size: 0.95rem;
     }
-    .nav-contact {
-        text-align: left;
+    .sub-brand {
+        font-size: 0.65rem;
+    }
+    .contact-btn span {
+        display: none;
+    }
+    .contact-btn {
+        padding: 0.55rem;
+    }
+    .contact-dropdown {
+        right: 0;
+        left: auto;
     }
     .hero-banner {
         padding: 2.25rem 1.25rem 3.5rem;
@@ -1040,6 +1115,17 @@ h1, h2, h3, h4 {
     .bento-card {
         border-radius: 20px;
         padding: 1.25rem 1rem 3.25rem;
+    }
+    .hero-right-bento {
+        flex-direction: column;
+        width: 100%;
+    }
+    .hero-quick-card {
+        width: 100%;
+        min-width: unset;
+        height: auto;
+        justify-content: flex-start;
+        gap: 1rem;
     }
     .custom-modal.modal-wide,
     .custom-modal {

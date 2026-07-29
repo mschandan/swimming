@@ -51,3 +51,21 @@ if (heroBanner) {
     });
 }
 
+// Email support dropdown in navbar
+function toggleEmailDropdown(e) {
+    e.stopPropagation();
+    const btn = document.getElementById('email-btn');
+    const dropdown = document.getElementById('email-dropdown');
+    const isOpen = dropdown.classList.toggle('open');
+    btn.setAttribute('aria-expanded', isOpen);
+}
+
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('email-dropdown');
+    const btn = document.getElementById('email-btn');
+    if (dropdown && dropdown.classList.contains('open') && !dropdown.contains(e.target) && e.target !== btn) {
+        dropdown.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+    }
+});
+

@@ -23,8 +23,15 @@
                 </div>
             </div>
             <div class="nav-contact">
-                <span class="contact-label">Email Support</span>
-                <span class="contact-number">office.sports@iith.ac.in</span>
+                <button class="contact-btn" id="email-btn" onclick="toggleEmailDropdown(event)" aria-haspopup="true" aria-expanded="false">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                    <span>Email Support</span>
+                    <svg class="contact-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="contact-dropdown" id="email-dropdown">
+                    <span class="contact-dropdown-label">Email us at</span>
+                    <a class="contact-number" href="mailto:office.sports@iith.ac.in">office.sports@iith.ac.in</a>
+                </div>
             </div>
         </div>
     </nav>
@@ -365,7 +372,7 @@
         </div>
         <div class="modal-body instructions-body">
             <div class="rules-section">
-                <h4>📌 General Guidelines</h4>
+                <h4><svg class="rule-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> General Guidelines</h4>
                 <ul>
                     <li>No entry without swimming pool ID card.</li>
                     <li>Swimmers must enter details in the register at the time of entry and exit.</li>
@@ -377,7 +384,7 @@
             </div>
 
             <div class="rules-section">
-                <h4>🧼 Health & Hygiene</h4>
+                <h4><svg class="rule-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg> Health &amp; Hygiene</h4>
                 <ul>
                     <li>Swimming costume is mandatory for all swimmers.</li>
                     <li>Remove shoes outside the swimming pool premises.</li>
@@ -390,7 +397,7 @@
             </div>
 
             <div class="rules-section">
-                <h4>🛡️ Safety Protocols</h4>
+                <h4><svg class="rule-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.35 8.95a1 1 0 0 1-.6-.01C8.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> Safety Protocols</h4>
                 <ul>
                     <li>Swimming is strictly prohibited without a Coach and Lifeguard present.</li>
                     <li>Beginners must remain at the shallow end.</li>
