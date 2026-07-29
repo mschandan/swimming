@@ -1,1342 +1,519 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lane 1 — Pool Gate</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/favicon-64.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<meta name="theme-color" content="#04121f">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Lane 1">
-<link rel="preconnect" href="https://api.fontshare.com">
-<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,500&f[]=general-sans@600,500,400&display=swap">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
-<style>
-/* =====================================================================
-   LANE 1 — design system
-   Deep water navy, chlorine cyan, chunky offset shadows, lane-rope rules.
-   Verdicts are solid colour fields with dark ink: readable across a gate.
-   ===================================================================== */
-:root{
-  --ink:#04121f; --ink2:#071c2e; --panel:#0a2137; --panel2:#0d2942; --line:#17415f;
-  --txt:#eaf6ff; --dim:#79a6c6; --faint:#3d6683;
-  --cyan:#00d9ff; --aqua:#00e58a; --sun:#ffc93c; --coral:#ff4d5e; --violet:#a179ff;
-  --ok-ink:#03291b; --warn-ink:#332508; --bad-ink:#2d0409;
-  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --sans:"General Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  --disp:"Cabinet Grotesk","General Sans",-apple-system,sans-serif;
-  --sh:4px 4px 0 rgba(0,0,0,.45);
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  background:var(--ink);color:var(--txt);font:16px/1.45 var(--sans);
-  height:100vh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased;
-}
-.rope{
-  height:7px;flex-shrink:0;
-  background:repeating-linear-gradient(90deg,var(--cyan) 0 16px,#0b3b52 16px 20px,var(--sun) 20px 36px,#0b3b52 36px 40px);
-  opacity:.5;
-}
-
-/* ---------------- header ---------------- */
-header{
-  display:flex;align-items:center;gap:12px;padding:11px 18px;
-  background:linear-gradient(180deg,var(--panel2),var(--panel));border-bottom:2px solid var(--line);flex-shrink:0;
-}
-.mark{
-  width:34px;height:34px;border-radius:10px;flex-shrink:0;
-  background:linear-gradient(150deg,var(--cyan),#0077b6);border:2px solid #0b3b52;box-shadow:var(--sh);
-  display:flex;align-items:center;justify-content:center;
-}
-.mark svg{width:20px;height:20px}
-.mark.big{width:56px;height:56px;border-radius:16px}
-.mark.big svg{width:34px;height:34px}
-.brand{line-height:1.15}
-.brand b{font-family:var(--disp);font-size:17px;font-weight:800;letter-spacing:-.4px;display:block}
-.brand span{font-size:9.5px;letter-spacing:2.2px;text-transform:uppercase;color:var(--cyan);font-weight:700}
-.spacer{flex:1;min-width:0}
-.stat{font:12px/1 var(--mono);color:var(--dim);white-space:nowrap;background:var(--ink);
-  border:1.5px solid var(--line);border-radius:20px;padding:7px 12px}
-.stat b{color:var(--cyan)}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--coral);flex-shrink:0;margin-right:2px}
-.dot.live{background:var(--aqua);box-shadow:0 0 0 0 rgba(0,229,138,.6);animation:pulse 2.4s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(0,229,138,0)}100%{box-shadow:0 0 0 0 rgba(0,229,138,0)}}
-
-button{
-  font:700 13px var(--sans);letter-spacing:.2px;background:var(--panel2);color:var(--txt);
-  border:2px solid var(--line);border-radius:11px;padding:8px 14px;cursor:pointer;
-  box-shadow:var(--sh);white-space:nowrap;flex-shrink:0;transition:transform .07s,box-shadow .07s,background .12s;
-}
-button:hover{background:#12395a;border-color:#1f5580}
-button:active{transform:translate(3px,3px);box-shadow:0 0 0 rgba(0,0,0,0)}
-button.primary{background:var(--cyan);color:#02202c;border-color:#00a5c4}
-button.primary:hover{background:#4de6ff}
-button.ghost{background:transparent;box-shadow:none}
-button.ghost:hover{background:rgba(255,255,255,.06)}
-button.icon{padding:8px 11px;font-size:16px;line-height:1}
-button.nav.on{background:var(--cyan);color:#02202c;border-color:#00a5c4}
-button .badge{display:inline-block;background:var(--coral);color:#fff;border-radius:20px;font:800 10px var(--mono);padding:1px 6px;margin-left:5px;vertical-align:1px}
-
-main{flex:1;overflow:hidden;position:relative}
-.view{display:none;height:100%;overflow:auto}
-.view.on{display:block}
-#scanView{display:none;height:100%;flex-direction:column}
-#scanView.on{display:flex}
-
-/* ---------------- home dashboard ---------------- */
-.dash{flex:1;overflow:auto;padding:22px 22px 8px;position:relative}
-.dash::before{
-  content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;
-  background:radial-gradient(700px 300px at 15% 0%, rgba(0,217,255,.08), transparent 60%),
-             radial-gradient(600px 280px at 90% 30%, rgba(0,229,138,.06), transparent 60%);
-}
-.dashHead{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-.dashPulse{display:flex;align-items:center;gap:7px;font:700 10.5px var(--mono);letter-spacing:1.4px;color:var(--aqua);
-  background:rgba(0,229,138,.08);border:1.5px solid rgba(0,229,138,.3);border-radius:20px;padding:7px 13px}
-.feedCard{margin-bottom:14px}
-.feedRow{display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid #123449;cursor:pointer}
-.feedRow:last-child{border-bottom:none}
-.feedRow:hover{background:#0f3050}
-.feedDot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.feedRow .fname{font-weight:600;font-size:13.5px}
-.feedRow .froll{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:1px}
-.feedRow .ftime{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim);white-space:nowrap}
-
-/* ---------------- verdict popup ---------------- */
-.vpop{position:fixed;inset:0;z-index:600;display:none;align-items:center;justify-content:center;
-  padding:22px;background:rgba(4,18,31,.6);backdrop-filter:blur(5px)}
-.vpop.show{display:flex}
-.vcard{width:100%;max-width:460px;background:var(--panel);border-radius:24px;overflow:hidden;
-  box-shadow:0 24px 70px rgba(0,0,0,.55);animation:vpop .24s cubic-bezier(.2,1.4,.4,1)}
-@keyframes vpop{from{transform:scale(.88) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
-.vtop{padding:26px 28px 20px}
-.vtop.ok  {background:var(--aqua);color:var(--ok-ink)}
-.vtop.warn{background:var(--sun); color:var(--warn-ink)}
-.vtop.bad {background:var(--coral);color:var(--bad-ink)}
-.vtop.busy{background:var(--panel2);color:var(--cyan)}
-.vstatus{display:flex;align-items:center;gap:12px}
-.vic{font-size:clamp(26px,5vw,34px);line-height:1}
-.vbig{font-family:var(--disp);font-weight:800;font-size:clamp(30px,6vw,42px);letter-spacing:-1.6px;line-height:1}
-.vsub{font-size:13px;margin-top:8px;opacity:.85;font-weight:500;line-height:1.6}
-.vsub b{font-weight:800}
-.vmid{padding:20px 28px;border-bottom:2px dashed var(--line);position:relative}
-.vmid::before,.vmid::after{content:"";position:absolute;width:22px;height:22px;background:var(--ink);border-radius:50%;bottom:-13px}
-.vmid::before{left:-13px} .vmid::after{right:-13px}
-.vname{font-family:var(--disp);font-weight:700;font-size:24px;letter-spacing:-.4px}
-.vroll{font-family:var(--mono);color:var(--dim);font-size:12.5px;letter-spacing:2.5px;margin-top:4px}
-.vrail{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line)}
-.vrail .vchip{background:var(--panel);padding:16px 18px}
-.vrail .vchip .vv{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.3px}
-.vrail .vchip .vl{font:700 9.5px var(--sans);color:var(--dim);text-transform:uppercase;letter-spacing:1.1px;margin-top:3px}
-
-.strip{display:flex;gap:12px;align-items:center;padding:12px 18px;background:var(--panel);border-top:2px solid var(--line);flex-shrink:0}
-#entry{flex:1;background:var(--ink);border:2px solid var(--line);border-radius:12px;padding:13px 16px;
-  color:var(--txt);font:700 16px/1 var(--mono);letter-spacing:2.5px;outline:none}
-#entry:focus{border-color:var(--cyan);box-shadow:0 0 0 4px rgba(0,217,255,.13)}
-#entry::placeholder{color:var(--faint);letter-spacing:1.5px}
-.ready{font:700 10.5px var(--mono);letter-spacing:1.6px;text-transform:uppercase;color:var(--aqua);display:flex;align-items:center;gap:7px;white-space:nowrap}
-
-/* ---------------- panels ---------------- */
-.wrap{max-width:1060px;margin:0 auto;padding:26px 20px 70px}
-h2{font-family:var(--disp);font-size:27px;font-weight:700;letter-spacing:-.6px}
-.sub{color:var(--dim);font-size:13px;margin-bottom:20px}
-.card{background:var(--panel);border:2px solid var(--line);border-radius:15px;padding:18px;margin-bottom:16px;box-shadow:var(--sh)}
-label{display:block;font:800 10.5px var(--sans);color:var(--cyan);margin-bottom:8px;text-transform:uppercase;letter-spacing:1.6px}
-.row{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin-top:16px}
-input[type=text]{width:100%;background:var(--ink);border:2px solid var(--line);border-radius:11px;
-  padding:11px 13px;color:var(--txt);font:inherit;font-size:14px;outline:none}
-input[type=text]:focus{border-color:var(--cyan)}
-
-table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{text-align:left;padding:11px 12px;color:var(--cyan);font:800 10px var(--sans);text-transform:uppercase;letter-spacing:1.3px;border-bottom:2px solid var(--line)}
-td{padding:11px 12px;border-bottom:1px solid #123449}
-tr:last-child td{border-bottom:none}
-tr.click{cursor:pointer}
-tr.click:hover td{background:#0f3050}
-.mono{font-family:var(--mono);font-size:12.5px}
-.pill{display:inline-block;padding:3px 11px;border-radius:20px;font:800 10.5px var(--mono);letter-spacing:.7px;border:1.5px solid}
-.pill.ok  {background:rgba(0,229,138,.13);color:var(--aqua);border-color:rgba(0,229,138,.4)}
-.pill.bad {background:rgba(255,77,94,.13);color:var(--coral);border-color:rgba(255,77,94,.4)}
-.pill.warn{background:rgba(255,201,60,.13);color:var(--sun);border-color:rgba(255,201,60,.4)}
-.msg{padding:13px 15px;border-radius:12px;font-size:13.5px;margin-top:15px;line-height:1.65;border:2px solid}
-.msg.err {background:rgba(255,77,94,.1);color:#ffb3ba;border-color:rgba(255,77,94,.45)}
-.msg.good{background:rgba(0,229,138,.1);color:#8ff5cb;border-color:rgba(0,229,138,.45)}
-.msg.info{background:rgba(0,217,255,.09);color:#a5e9fb;border-color:rgba(0,217,255,.4)}
-code{font:600 12.5px var(--mono);background:var(--ink);padding:3px 7px;border-radius:6px;color:var(--cyan)}
-.empty{color:var(--dim);text-align:center;padding:38px;font-size:14px}
-
-/* ---------------- member profile ---------------- */
-.phead{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
-.back{margin-bottom:18px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:12px;margin-bottom:16px}
-.tile{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:14px 15px;box-shadow:var(--sh);border-top:5px solid var(--cyan)}
-.tile:nth-child(2){border-top-color:var(--aqua)}
-.tile:nth-child(3){border-top-color:var(--sun)}
-.tile:nth-child(4){border-top-color:var(--violet)}
-.tile:nth-child(5){border-top-color:var(--coral)}
-.tile:nth-child(6){border-top-color:var(--cyan)}
-.tile .n{font:700 27px/1.1 var(--disp);letter-spacing:-1px}
-.tile .l{font:800 9.5px var(--sans);color:var(--dim);text-transform:uppercase;letter-spacing:1.3px;margin-top:6px}
-.tile .s{font-size:11.5px;color:var(--faint);margin-top:3px}
-.bar{height:12px;background:var(--ink);border-radius:20px;overflow:hidden;margin:12px 0 7px;border:2px solid var(--line)}
-.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--aqua))}
-.bar.warn i{background:linear-gradient(90deg,var(--sun),#ff9f1c)}
-.bar.bad i{background:var(--coral)}
-.cal{display:flex;gap:22px;flex-wrap:wrap}
-.mo{width:158px}
-.mo h4{font:800 10.5px var(--sans);color:var(--cyan);margin-bottom:8px;letter-spacing:1.4px;text-transform:uppercase}
-.dow,.days{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.dow span{font:700 8.5px var(--mono);color:var(--faint);text-align:center;padding-bottom:4px}
-.d{aspect-ratio:1;border-radius:5px;background:#0a2035;display:flex;align-items:center;justify-content:center;font:600 8.5px var(--mono);color:#2f556e}
-.d.pad{background:transparent}
-.d.in{background:#123249;color:#4b7a99}
-.d.hit{background:var(--aqua);color:var(--ok-ink);font-weight:800}
-.d.hit2{background:var(--cyan);color:#02202c;font-weight:800;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
-.d.today{outline:2px solid var(--sun);outline-offset:1px}
-.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:18px;font-size:11.5px;color:var(--dim);align-items:center}
-.legend i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:6px;vertical-align:-2px;border:1px solid rgba(255,255,255,.18)}
-
-@media (max-width:1050px){ .brand span,.stat{display:none} }
-
-/* ---------------- landing (public) ---------------- */
-#landingView{height:100%;overflow:auto;position:relative}
-.hero{
-  min-height:64vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:60px 22px 40px;position:relative;overflow:hidden;
-}
-.hero::before{
-  content:"";position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(900px 420px at 50% -8%, rgba(0,217,255,.14), transparent 62%),
-             radial-gradient(700px 360px at 85% 90%, rgba(0,229,138,.10), transparent 60%);
-  animation:drift 16s ease-in-out infinite alternate;
-}
-.hero .mark{margin:0 auto 22px;width:66px;height:66px;border-radius:18px}
-.hero .mark svg{width:40px;height:40px}
-.hero h1{font-family:var(--disp);font-size:clamp(32px,6vw,54px);font-weight:800;letter-spacing:-1.6px;z-index:1}
-.hero .tag{color:var(--dim);font-size:clamp(14px,1.8vw,18px);margin-top:12px;max-width:520px;z-index:1}
-.info{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;max-width:820px;margin:30px auto 0;z-index:1;padding:0 22px;width:100%}
-.info .card{margin:0;text-align:left}
-.info .card b{display:block;font-size:14.5px;margin-bottom:4px}
-.info .card span{color:var(--dim);font-size:13px;line-height:1.6}
-.staffBtn{margin-top:34px;z-index:1}
-.foot{text-align:center;padding:20px;color:var(--faint);font-size:11.5px;font-family:var(--mono)}
-
-/* ---------------- PIN lock ---------------- */
-#lockScreen{position:fixed;inset:0;background:rgba(4,18,31,.88);backdrop-filter:blur(6px);z-index:999;
-  display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:20px}
-#lockScreen.on{display:flex}
-#lockScreen .panel{background:var(--panel);border:2px solid var(--line);border-radius:20px;
-  padding:38px 34px;box-shadow:var(--sh);display:flex;flex-direction:column;align-items:center;gap:14px;max-width:340px;width:100%}
-#lockScreen h3{font-size:19px;font-weight:800;letter-spacing:-.4px}
-#lockScreen .sub{color:var(--dim);font-size:12.5px;margin-top:-8px;text-align:center}
-#pinInput{width:220px;text-align:center;font:800 26px var(--mono);letter-spacing:14px;
-  background:var(--ink);border:2px solid var(--line);border-radius:13px;padding:14px 10px 14px 24px;color:var(--txt);outline:none}
-#pinInput:focus{border-color:var(--cyan)}
-#pinErr{color:var(--coral);font-size:12.5px;font-weight:700;height:14px}
-
-/* ---------------- settings ---------------- */
-.set-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #123449}
-.set-row:last-child{border-bottom:none}
-.set-row .l{font-size:14px;font-weight:600}
-.set-row .s{color:var(--dim);font-size:12px;margin-top:2px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IITH Aquatics Portal - Swimming Registration</title>
+    <meta name="description" content="Official IIT Hyderabad Swimming Registration and Renewal Portal for August 2026.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-<!-- ============ PIN LOCK (overlay) ============ -->
-<div id="lockScreen">
-  <div class="panel">
-    <div class="mark big">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#04121f" stroke-width="2.6" stroke-linecap="round">
-        <path d="M2 17c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <path d="M2 21c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <circle cx="16" cy="5.5" r="2.2" fill="#04121f"/><path d="M5 11l4-2 5 2.5"/>
-      </svg>
-    </div>
-    <h3>Gate Staff Login</h3>
-    <div class="sub">Enter the PIN shared with you by the coach</div>
-    <input id="pinInput" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
-    <div id="pinErr"></div>
-    <button class="ghost" onclick="closeLock()">← Back</button>
-  </div>
-</div>
-
-<!-- ============ LANDING (public) ============ -->
-<section id="landingView" class="view on">
-  <header>
-    <div class="mark">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#04121f" stroke-width="2.6" stroke-linecap="round">
-        <path d="M2 17c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <path d="M2 21c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <circle cx="16" cy="5.5" r="2.2" fill="#04121f"/><path d="M5 11l4-2 5 2.5"/>
-      </svg>
-    </div>
-    <div class="brand"><b id="brandName">Lane 1</b><span>Pool Membership</span></div>
-    <div class="spacer"></div>
-    <button class="primary" onclick="openLock()">Staff Login</button>
-  </header>
-  <div class="rope"></div>
-
-  <div class="hero">
-    <div class="mark big">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#04121f" stroke-width="2.4" stroke-linecap="round">
-        <path d="M2 17c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <path d="M2 21c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <circle cx="16" cy="5.5" r="2.2" fill="#04121f"/><path d="M5 11l4-2 5 2.5"/>
-      </svg>
-    </div>
-    <h1 id="heroName">Lane 1 Aquatics</h1>
-    <div class="tag" id="heroTag">Monthly swim membership — gate entry verified at scan-in.</div>
-
-    <div class="info" id="infoCards"></div>
-
-    <button class="primary staffBtn" onclick="openLock()">Staff Login →</button>
-  </div>
-
-  <div class="foot">Lane 1 · Gate Control</div>
-</section>
-
-<!-- ============ APP SHELL (behind PIN) ============ -->
-<div id="appShell" style="display:none;height:100%;flex-direction:column">
-  <header>
-    <div class="mark">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#04121f" stroke-width="2.6" stroke-linecap="round">
-        <path d="M2 17c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <path d="M2 21c2.2 0 2.2-2 4.4-2s2.2 2 4.4 2 2.2-2 4.4-2 2.2 2 4.4 2"/>
-        <circle cx="16" cy="5.5" r="2.2" fill="#04121f"/><path d="M5 11l4-2 5 2.5"/>
-      </svg>
-    </div>
-    <div class="brand"><b>Lane 1</b><span>Gate Control</span></div>
-    <div class="spacer"></div>
-    <div class="stat"><span class="dot" id="liveDot"></span><span id="stat">no data</span></div>
-    <button class="nav on" id="nav-scanView"  onclick="show('scanView')">Scan</button>
-    <button class="nav"    id="nav-adminView" onclick="show('adminView')">Members</button>
-    <button class="nav"    id="nav-logView"   onclick="show('logView')">Today <span id="logCount"></span></button>
-    <button class="icon"   onclick="show('settingsView')" title="Settings">⚙</button>
-  </header>
-  <div class="rope"></div>
-
-  <main>
-    <!-- ============ HOME / SCAN ============ -->
-    <section id="scanView" class="view on">
-      <div class="dash">
-        <div class="dashHead">
-          <div>
-            <h2>Gate Dashboard</h2>
-            <div class="sub" id="dashSub" style="margin:0">Scan a card any time — the popup shows the result</div>
-          </div>
-          <div class="dashPulse"><span class="dot live"></span>SCANNER ARMED</div>
+    <nav class="navbar">
+        <div class="container nav-content">
+            <div class="brand">
+                <div class="logo-mark">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M12 2v20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
+                </div>
+                <div class="brand-text">
+                    <h1>IIT HYDERABAD</h1>
+                    <span class="sub-brand">Department of Sports</span>
+                </div>
+            </div>
+            <div class="nav-contact">
+                <span class="contact-label">Email Support</span>
+                <span class="contact-number">office.sports@iith.ac.in</span>
+            </div>
         </div>
-        <div class="tiles" id="dashTiles"></div>
-        <div class="card feedCard">
-          <label>Latest entries</label>
-          <div id="feedTable"></div>
+    </nav>
+
+    <main class="container">
+        <!-- Self-Contained Hero Banner -->
+        <header class="hero-banner">
+            <div class="hero-flex">
+                <div class="hero-left">
+                    <div class="hero-badge"><span class="badge-dot">●</span> August 2026 Session</div>
+                    <h1 class="hero-title">IITH Aquatics Portal</h1>
+                    <p class="hero-subtitle">Official registration and pass renewal for the SNCC Swimming Pool facility. Complete the steps below to secure your pool pass.</p>
+                </div>
+                <div class="hero-right-bento">
+                    <div class="hero-quick-card" onclick="openModal('charges-modal')">
+                        <div class="hero-card-top">
+                            <div class="hero-card-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                            </div>
+                            <span class="hero-arrow">↗</span>
+                        </div>
+                        <div class="hero-card-bottom">
+                            <h4>Subscription Charges</h4>
+                            <p>View 10-tier fee structure</p>
+                        </div>
+                    </div>
+                    
+                    <div class="hero-quick-card" onclick="openModal('timings-modal')">
+                        <div class="hero-card-top">
+                            <div class="hero-card-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                            <span class="hero-arrow">↗</span>
+                        </div>
+                        <div class="hero-card-bottom">
+                            <h4>Pool Slot Schedule</h4>
+                            <p>Check daily slot timings</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Timeline Track & Grid -->
+        <section class="timeline-container">
+            <div class="timeline-track"></div>
+            <div class="timeline-grid">
+                
+                <!-- Card 1 -->
+                <div class="timeline-item">
+                    <div class="timeline-header">
+                        <div class="timeline-node">
+                            <span class="step-num">01</span>
+                        </div>
+                    </div>
+                    <div class="bento-card" onclick="window.open('https://docs.google.com/document/d/1pQHvkAa1N114St5_VXMXhU2dz4eOlVG4/view?usp=drive_link', '_blank')">
+                        <div class="liquid-bg"></div>
+                        <div class="bento-badge-top">Form 01</div>
+                        <h3>Application Form</h3>
+                        <p class="card-desc">Download cutoff & registration form before submitting.</p>
+                        <div class="bento-tags">
+                            <span class="tag">• Doc Form</span>
+                            <span class="tag">• Printable</span>
+                        </div>
+                        <div class="bento-corner-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="timeline-item">
+                    <div class="timeline-header">
+                        <div class="timeline-node">
+                            <span class="step-num">02</span>
+                        </div>
+                    </div>
+                    <div class="bento-card" onclick="window.open('https://drive.google.com/file/d/1Y4MZH5WZ4MZ2_dw9J3aJYC21RLgNfDbE/view?usp=drive_link', '_blank')">
+                        <div class="liquid-bg"></div>
+                        <div class="bento-badge-top">Clearance</div>
+                        <h3>Medical Check</h3>
+                        <p class="card-desc">Doctor fitness entry required in medical book.</p>
+                        <div class="bento-tags">
+                            <span class="tag">• IITH Doctor</span>
+                        </div>
+                        <div class="bento-corner-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3 (Bright Blue Featured Bento Card!) -->
+                <div class="timeline-item">
+                    <div class="timeline-header">
+                        <div class="timeline-node active">
+                            <span class="step-num">03</span>
+                        </div>
+                    </div>
+                    <div class="bento-card card-bright-featured text-center">
+                        <div class="liquid-bg"></div>
+                        <div class="bento-badge-top badge-white center-badge">UPI Payment</div>
+                        <h3>Fee Payment</h3>
+                        <div class="bento-qr-bottom">
+                            <div class="bento-qr-box">
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=upi://pay?pa=swimmingpooliith@cnrb" alt="QR">
+                            </div>
+                            <div class="bento-upi-tag">
+                                <code>swimmingpooliith@cnrb</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="timeline-item">
+                    <div class="timeline-header">
+                        <div class="timeline-node">
+                            <span class="step-num">04</span>
+                        </div>
+                    </div>
+                    <div class="bento-card" onclick="window.open('https://forms.gle/Vy8GFmkqgsv4iLjH6', '_blank')">
+                        <div class="liquid-bg"></div>
+                        <div class="bento-badge-top">Portal</div>
+                        <h3>Online Submission</h3>
+                        <p class="card-desc">Submit transaction ref & details via Google Form.</p>
+                        <div class="bento-tags">
+                            <span class="tag">• Online</span>
+                            <span class="tag">• Google Form</span>
+                        </div>
+                        <div class="bento-corner-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 5 -->
+                <div class="timeline-item">
+                    <div class="timeline-header">
+                        <div class="timeline-node success">
+                            <span class="step-num">05</span>
+                        </div>
+                    </div>
+                    <div class="bento-card" onclick="alert('Visit SNCC Desk during working hours with physical documents!')">
+                        <div class="liquid-bg"></div>
+                        <div class="bento-badge-top">Pass Collect</div>
+                        <h3>Physical Pass</h3>
+                        <p class="card-desc">Collect physical pass from SNCC Pool desk.</p>
+                        <div class="bento-tags">
+                            <span class="tag">• Final Step</span>
+                            <span class="tag">• SNCC Desk</span>
+                        </div>
+                        <div class="bento-corner-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Information Panels -->
+        <section class="info-grid">
+            <div class="info-card">
+                <div class="info-card-header">
+                    <span class="info-badge">New Applicants</span>
+                    <h3>Physical Submission Required</h3>
+                </div>
+                <p>Submit the following at the SNCC Pool desk:</p>
+                <ul class="check-list">
+                    <li>Original <a href="https://docs.google.com/document/d/1pQHvkAa1N114St5_VXMXhU2dz4eOlVG4/view?usp=drive_link" target="_blank">Application Form</a></li>
+                    <li>Doctor-Signed <a href="https://drive.google.com/file/d/1Y4MZH5WZ4MZ2_dw9J3aJYC21RLgNfDbE/view?usp=drive_link" target="_blank">Medical Certificate</a></li>
+                    <li>Two passport-sized photos</li>
+                </ul>
+            </div>
+
+            <div class="info-card">
+                <div class="info-card-header">
+                    <span class="info-badge badge-alt">Renewals</span>
+                    <h3>Fast-Track Renewal</h3>
+                </div>
+                <p>Existing members only need to complete <strong>Step 03</strong> and <strong>Step 04</strong> online.</p>
+                <p class="sub-text">No physical form or photo submission required for renewals.</p>
+            </div>
+        </section>
+
+        <!-- Resources Footer Bar -->
+        <section class="resource-strip">
+            <div class="resource-info">
+                <h3>Need Timings & Guidelines?</h3>
+                <p>Check slot schedules and pool safety rules before visiting.</p>
+            </div>
+            <div class="resource-btns">
+                <button class="bento-btn outline" onclick="openModal('instructions-modal')">Safety Protocols</button>
+                <button class="bento-btn outline" onclick="openModal('timings-modal')">Slot Schedule</button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <div class="container footer-content">
+            <div class="footer-col brand-col">
+                <div class="footer-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5"><path d="M2 12h20"/><path d="M12 2v20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
+                    <span>IITH Aquatics</span>
+                </div>
+                <p>Official Swimming Pool Portal of IIT Hyderabad, Kandi, Sangareddy.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Quick Downloads & Links</h4>
+                <a href="https://forms.gle/Vy8GFmkqgsv4iLjH6" target="_blank">Step 04: Online Submission Form ↗</a>
+                <a href="https://docs.google.com/document/d/1pQHvkAa1N114St5_VXMXhU2dz4eOlVG4/view?usp=drive_link" target="_blank">Application Form ↗</a>
+                <a href="https://drive.google.com/file/d/1Y4MZH5WZ4MZ2_dw9J3aJYC21RLgNfDbE/view?usp=drive_link" target="_blank">Medical Certificate Form ↗</a>
+                <a href="https://drive.google.com/file/d/1lbONv1csQNiNfPjgxv3W93oIUKSNAvVH/view?usp=drive_link" target="_blank">Safety Guidelines ↗</a>
+                <a href="https://docs.google.com/document/d/18MQjzxE6C34_1clXVg-YEqP-IqTGix9i/view?usp=drive_link" target="_blank">Pool Slot Schedule ↗</a>
+                <a href="https://drive.google.com/file/d/1XzEqNtjEjJxfU4xEo2S9LLDoYC9tqgR2/view?usp=drive_link" target="_blank">Subscription Charges PDF ↗</a>
+            </div>
+            <div class="footer-col">
+                <h4>Contact Desk</h4>
+                <p>SNCC Swimming Pool, IITH</p>
+                <p>Email: <strong>office.sports@iith.ac.in</strong></p>
+                <p>Phone: <strong>040-23016840</strong></p>
+            </div>
         </div>
-      </div>
-      <div class="rope"></div>
-      <div class="strip">
-        <input id="entry" placeholder="SCAN CARD…" autocomplete="off" spellcheck="false">
-        <span class="ready"><span class="dot live"></span>Scanner armed</span>
-      </div>
-    </section>
-
-    <!-- ============ VERDICT POPUP ============ -->
-    <div id="verdictPopup" class="vpop" onclick="if(event.target===this) hidePopup()">
-      <div class="vcard" id="vcard">
-        <div class="vtop" id="vtop">
-          <div class="vstatus"><span class="vic" id="vic"></span><span class="vbig" id="vbig"></span></div>
-          <div class="vsub" id="vsub"></div>
+        <div class="footer-bottom text-center">
+            <p>© 2026 Department of Sports, IIT Hyderabad. All rights reserved.</p>
         </div>
-        <div class="vmid">
-          <div class="vname" id="vname"></div>
-          <div class="vroll" id="vroll"></div>
+    </footer>
+
+    <!-- Modals -->
+    <dialog id="charges-modal" class="custom-modal modal-wide">
+        <div class="modal-head">
+            <h3>Swimming Pool Subscription Charges</h3>
+            <button class="close-x" onclick="closeModal('charges-modal')">&times;</button>
         </div>
-        <div class="vrail" id="vrail"></div>
-      </div>
-    </div>
-
-    <!-- ============ LOG ============ -->
-    <section id="logView" class="view">
-      <div class="wrap">
-        <h2>Today at the gate</h2>
-        <div class="sub" id="logSub"></div>
-        <div class="tiles" id="dayTiles"></div>
-        <div class="row" style="margin:0 0 16px">
-          <button class="primary" onclick="exportLog()">Download full CSV</button>
-          <button onclick="clearLog()">Clear history</button>
+        <div class="modal-body">
+            <p class="effective-date">With Effect from 1st September 2025</p>
+            <div class="table-responsive">
+                <table class="fee-table">
+                    <thead>
+                        <tr>
+                            <th>S.No</th>
+                            <th>Applicable Category</th>
+                            <th>1 Month</th>
+                            <th>3 Months</th>
+                            <th>6 Months</th>
+                            <th>Annual</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>Registered IITH Students, Children of IITH employees, Project students & Married students (5 to 18 yrs)</td>
+                            <td>₹500</td>
+                            <td>₹1,200</td>
+                            <td>₹2,000</td>
+                            <td>₹3,500</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>Employee of IITH, Guest faculty, Project staff & Spouse/Dependents</td>
+                            <td>₹800</td>
+                            <td>₹2,000</td>
+                            <td>₹3,500</td>
+                            <td>₹6,000</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>Retired IITH Employee & Spouse</td>
+                            <td>₹1,000</td>
+                            <td>₹2,500</td>
+                            <td>₹4,000</td>
+                            <td>N/A</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>Alumni of IITH, Retired Employees' Dependents</td>
+                            <td>₹2,000</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td>Interns</td>
+                            <td>₹2,500</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                        </tr>
+                        <tr>
+                            <td>6</td>
+                            <td>Relatives/Guests of IITH Employees (Below 5 Yrs)</td>
+                            <td>₹2,500</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                        </tr>
+                        <tr>
+                            <td>7</td>
+                            <td>Relatives/Guests of IITH Employees (Above 5 Yrs)</td>
+                            <td>₹5,000</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                        </tr>
+                        <tr>
+                            <td>8</td>
+                            <td>Employees of DAV School, Bank (SBI/Canara/ICICI/HDFC), Post Office inside IITH campus & Dependents</td>
+                            <td>₹5,000</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                        </tr>
+                        <tr>
+                            <td>9</td>
+                            <td>Kids of IITH Employee & Married students (&lt; 5 Yrs)</td>
+                            <td colspan="4" class="text-center font-bold">₹1,200 (One-time Annual Registration)</td>
+                        </tr>
+                        <tr>
+                            <td>10</td>
+                            <td>Guest of IITH per slot</td>
+                            <td colspan="4" class="text-center font-bold">₹200 / slot</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer-flex">
+                <p class="fee-note"><strong>Note:</strong> Membership fee is non-refundable and non-transferable.</p>
+                <a href="https://drive.google.com/file/d/1XzEqNtjEjJxfU4xEo2S9LLDoYC9tqgR2/view?usp=drive_link" target="_blank" class="bento-btn primary">View Official PDF ↗</a>
+            </div>
         </div>
-        <div class="card" style="padding:6px 4px"><div id="logTable"></div></div>
-      </div>
-    </section>
+    </dialog>
 
-    <!-- ============ MEMBERS ============ -->
-    <section id="adminView" class="view">
-      <div class="wrap">
-        <h2>Members</h2>
-        <div class="sub" id="adminSub"></div>
-        <div class="card" style="padding:14px">
-          <input type="text" id="memberSearch" placeholder="Search name or roll number…" oninput="renderMembers()">
+    <dialog id="instructions-modal" class="custom-modal modal-wide">
+        <div class="modal-head">
+            <h3>Instructions & Guidelines for Swimmers</h3>
+            <button class="close-x" onclick="closeModal('instructions-modal')">&times;</button>
         </div>
-        <div class="card" style="padding:6px 4px"><div id="memberTable"></div></div>
-      </div>
-    </section>
+        <div class="modal-body instructions-body">
+            <div class="rules-section">
+                <h4>📌 General Guidelines</h4>
+                <ul>
+                    <li>No entry without swimming pool ID card.</li>
+                    <li>Swimmers must enter details in the register at the time of entry and exit.</li>
+                    <li>Swimmers are only allowed during their allotted/booked slot.</li>
+                    <li>Leave pool 5 minutes before slot completion for shower & exit preparations.</li>
+                    <li>Children below 12 years must be accompanied by parents.</li>
+                    <li>Do not bring expensive personal articles to the pool.</li>
+                </ul>
+            </div>
 
-    <!-- ============ PROFILE ============ -->
-    <section id="memberView" class="view">
-      <div class="wrap">
-        <button class="back" onclick="show('adminView')">← All members</button>
-        <div id="profile"></div>
-      </div>
-    </section>
+            <div class="rules-section">
+                <h4>🧼 Health & Hygiene</h4>
+                <ul>
+                    <li>Swimming costume is mandatory for all swimmers.</li>
+                    <li>Remove shoes outside the swimming pool premises.</li>
+                    <li>Swimmers with long hair must wear a swimming cap.</li>
+                    <li>Persons suffering from epilepsy, open wounds, skin/eye infections, or communicable diseases are strictly prohibited.</li>
+                    <li>Take a shower before entering and after exiting the pool.</li>
+                    <li>Smoking, intoxicants, and food items are strictly forbidden.</li>
+                    <li>Do not apply oil or ointment on the body prior to swimming.</li>
+                </ul>
+            </div>
 
-    <!-- ============ SETTINGS ============ -->
-    <section id="settingsView" class="view">
-      <div class="wrap">
-        <h2>Settings</h2>
-        <div class="sub">Data source and PIN are set in <code>config.js</code> — ask Chandan to change either.</div>
-
-        <div class="card">
-          <label>Data</label>
-          <div class="set-row">
-            <div><div class="l">Members loaded</div><div class="s" id="setMembers">—</div></div>
-            <button onclick="sync(true)">Sync now</button>
-          </div>
-          <div class="set-row">
-            <div><div class="l">Last synced</div><div class="s" id="setSynced">—</div></div>
-          </div>
-          <div id="settingsMsg"></div>
+            <div class="rules-section">
+                <h4>🛡️ Safety Protocols</h4>
+                <ul>
+                    <li>Swimming is strictly prohibited without a Coach and Lifeguard present.</li>
+                    <li>Beginners must remain at the shallow end.</li>
+                    <li>Deck area & changing room floors are slippery—walk carefully and do not run.</li>
+                    <li>Cut nails regularly; do not wear wrist/neck threads, bands, or metallic objects (rings, watches, bangles).</li>
+                    <li>Diving and horse-play/pushing are strictly forbidden.</li>
+                    <li>Photography is prohibited without explicit permission from FIC/Coach.</li>
+                    <li>Rule violations will result in immediate cancellation of membership.</li>
+                </ul>
+            </div>
+            <div class="modal-footer-flex">
+                <p class="fee-note"><strong>Note:</strong> The Coach may reserve any swimming slot for Inter-IIT Practice purposes.</p>
+                <a href="https://drive.google.com/file/d/1lbONv1csQNiNfPjgxv3W93oIUKSNAvVH/view?usp=drive_link" target="_blank" class="bento-btn primary">View Official PDF ↗</a>
+            </div>
         </div>
+    </dialog>
 
-        <div class="card">
-          <label>This device</label>
-          <div class="set-row">
-            <div><div class="l">Gate login</div><div class="s">Unlocked — this device won't ask for the PIN again</div></div>
-            <button onclick="lockDevice()">Lock this device</button>
-          </div>
+    <dialog id="timings-modal" class="custom-modal modal-wide">
+        <div class="modal-head">
+            <h3>Per Day Slot Timings - SNCC Swimming Pool</h3>
+            <button class="close-x" onclick="closeModal('timings-modal')">&times;</button>
         </div>
-      </div>
-    </section>
-  </main>
-</div>
-
-<script src="config.js"></script>
-<script>
-/* =====================================================================
-   LANE 1 — pool gate entry verification
-   Source of truth: a Google Sheet (config.js → CONFIG.SHEET_URL), read
-   as CSV, never written to. Entry history: this browser's localStorage,
-   exportable as CSV. PIN + column mapping live in config.js, not here.
-   ===================================================================== */
-
-const LS = { log:'pg_log', rows:'pg_rows', hdr:'pg_hdr', synced:'pg_synced', unlocked:'pg_unlocked' };
-const SYNC_EVERY_MS    = 60000;
-const INACTIVE = ['inactive','cancelled','canceled','stopped','no','left','suspended','expired'];
-
-let headers=[], members=[], roster=[], index={}, map={}, log=[], syncing=null;
-
-/* ---------------- landing / PIN gate ---------------- */
-function paintLanding(){
-  const s = CONFIG.SITE || {};
-  document.getElementById('brandName').textContent = s.poolName || 'Lane 1';
-  document.getElementById('heroName').textContent   = s.poolName || 'Lane 1 Aquatics';
-  document.getElementById('heroTag').textContent    = s.tagline  || '';
-
-  const cards = [];
-  if(s.location)  cards.push(['Location', s.location]);
-  if(s.timings)   cards.push(['Pool timings', s.timings]);
-  if(s.contact)   cards.push(['Contact', s.contact]);
-  if(s.renewNote) cards.push(['Membership', s.renewNote]);
-  document.getElementById('infoCards').innerHTML = cards.map(([b,t])=>
-    '<div class="card"><b>'+esc(b)+'</b><span>'+esc(t)+'</span></div>').join('');
-}
-function isUnlocked(){ return localStorage.getItem(LS.unlocked)==='1'; }
-function openLock(){
-  document.getElementById('lockScreen').classList.add('on');
-  const input=document.getElementById('pinInput');
-  const len = String(CONFIG.PIN||'').length || 4;   // follow config, don't assume 4 digits
-  input.maxLength = len;
-  input.placeholder = '•'.repeat(len);
-  input.value=''; document.getElementById('pinErr').textContent='';
-  setTimeout(()=>input.focus(),50);
-  input.oninput=()=>{
-    document.getElementById('pinErr').textContent='';
-    if(input.value.length===len){
-      if(input.value===CONFIG.PIN){
-        localStorage.setItem(LS.unlocked,'1');
-        document.getElementById('lockScreen').classList.remove('on');
-        enterApp();
-      }else{
-        document.getElementById('pinErr').textContent='Wrong PIN';
-        input.value=''; input.focus();
-      }
-    }
-  };
-}
-function closeLock(){ document.getElementById('lockScreen').classList.remove('on'); }
-function lockDevice(){
-  if(!confirm('Lock this device? You\'ll need the gate PIN again next time.')) return;
-  localStorage.removeItem(LS.unlocked);
-  document.getElementById('appShell').style.display='none';
-  document.getElementById('landingView').classList.add('on');
-}
-function enterApp(){
-  document.getElementById('landingView').classList.remove('on');
-  document.getElementById('appShell').style.display='flex';
-  if(members.length){ buildIndex(); paintStat(); }
-  renderLog(); renderMembers(); renderDashboard();
-  sync(false);
-  wireInput();
-  show('scanView');
-}
-
-/* ---------------- views (inside the app shell) ---------------- */
-function show(id){
-  document.querySelectorAll('#appShell .view').forEach(v=>v.classList.toggle('on', v.id===id));
-  document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on', b.id==='nav-'+id));
-  if(id==='scanView') focusEntry();
-  if(id==='logView')   renderLog();
-  if(id==='adminView') renderMembers();
-  if(id==='settingsView') paintSettings();
-}
-
-/* ---------------- scanner input ----------------
-   A USB barcode scanner is a keyboard: it types the code, then Enter.
-   One always-focused input therefore handles scanning AND typing.     */
-let inputWired=false;
-function wireInput(){
-  if(inputWired) return; inputWired=true;
-  const el = document.getElementById('entry');
-  el.addEventListener('keydown', e=>{
-    if(e.key==='Enter'){
-      e.preventDefault();
-      const v=el.value.trim(); el.value='';
-      if(v) lookup(v);
-    }
-  });
-  document.addEventListener('click', ()=>{ if(onScan()) focusEntry(); });
-  setInterval(()=>{ if(onScan() && document.activeElement!==el) focusEntry(); }, 700);
-  focusEntry();
-}
-function onScan(){ return document.getElementById('scanView').classList.contains('on'); }
-function focusEntry(){ const el=document.getElementById('entry'); if(el) el.focus(); }
-
-/* ---------------- the check ----------------
-   On a miss we re-pull the sheet and retry once, so somebody who
-   registered two minutes ago still gets through.                      */
-async function lookup(raw, isRetry){
-  audioUnlock();
-  const key = norm(raw);
-
-  if(!roster.length){
-    return popup('bad','NO DATA',{sub:'Sheet not loaded yet — check Settings', roll:raw});
-  }
-
-  const m = index[key];
-  if(m) return verdict(m, raw);
-
-  /* Not a roll number — fall back to matching a typed name. Guarded at 3
-     characters so a half-read barcode can't quietly admit a stranger who
-     happens to share those letters. */
-  const hits = raw.length>=3
-    ? roster.filter(r=> val(r,'name').toLowerCase().includes(raw.toLowerCase()))
-    : [];
-  if(hits.length===1) return verdict(hits[0], raw);
-  if(hits.length>1){
-    beep('warn');
-    return popup('warn','WHICH ONE?',{sub:hits.slice(0,6).map(h=>esc(val(h,'name'))+' — '+esc(val(h,'roll'))).join('<br>'), roll:raw});
-  }
-
-  if(!isRetry){
-    popup('busy','CHECKING…',{sub:'Re-reading the sheet for new registrations', roll:raw});
-    await sync(false);
-    return lookup(raw, true);
-  }
-
-  beep('bad'); record(raw,'','NOT REGISTERED');
-  popup('bad','NOT REGISTERED',{sub:'This card is not in the members sheet', roll:raw});
-}
-
-function verdict(m, raw){
-  const name = val(m,'name') || '—';
-  const roll = val(m,'roll') || raw;
-  const st   = statusOf(m);
-
-  if(st.state==='inactive'){
-    beep('bad'); record(roll,name,'INACTIVE');
-    return popup('bad','NOT ACTIVE',{sub:'Sheet says <b>'+esc(st.why)+'</b>', roll, name, m, st});
-  }
-  if(st.state==='nodate'){
-    beep('warn'); record(roll,name,'NO DATE');
-    return popup('warn','NO END DATE',{sub:'Can’t work out an expiry from this row — check manually', roll, name, m, st});
-  }
-  if(st.state==='expired'){
-    beep('bad'); record(roll,name,'EXPIRED');
-    return popup('bad','EXPIRED',{
-      sub:'Ended <b>'+fmt(st.end)+'</b> — '+daysPhrase(st.days).toLowerCase()+' — send to office',
-      roll, name, m, st});
-  }
-
-  /* counts BOTH earlier verdicts, so the third scan says 3rd, not 2nd */
-  const earlier = log.filter(e=> norm(e.roll)===norm(roll)
-                              && (e.verdict==='PAID' || e.verdict==='REPEAT')
-                              && sameDay(new Date(e.ts), new Date()));
-  if(earlier.length){
-    const first = earlier[earlier.length-1];
-    const mins  = Math.round((Date.now()-new Date(first.ts).getTime())/60000);
-    beep('warn'); record(roll,name,'REPEAT');
-    return popup('warn', ordinal(earlier.length+1)+' ENTRY TODAY',{
-      sub:'Already in at <b>'+time(new Date(first.ts))+'</b>'+(mins<90?' — '+mins+' min ago':''),
-      roll, name, m, st});
-  }
-
-  record(roll,name,'PAID');
-  if(st.state==='grace'){
-    beep('warn');
-    return popup('warn','GRACE PERIOD',{
-      sub:'Expired <b>'+fmt(st.end)+'</b> — let in on grace, but they must renew', roll, name, m, st});
-  }
-  if(st.state==='soon'){
-    beep('warn');
-    return popup('warn', st.days===0 ? 'LAST DAY' : 'EXPIRES IN '+st.days+' DAY'+(st.days===1?'':'S'),{
-      sub:'Valid through <b>'+fmt(st.end)+'</b> — ask them to renew', roll, name, m, st});
-  }
-  beep('ok');
-  popup('ok','PAID',{sub:'Entry logged', roll, name, m, st});
-}
-function ordinal(n){ const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
-
-/* ---------------- verdict popup ---------------- */
-function popup(kind, big, opt){
-  opt = opt || {};
-  const icon = {ok:'✔', bad:'✕', warn:'!', busy:'⟳'}[kind] || '';
-  document.getElementById('vtop').className = 'vtop '+kind;
-  document.getElementById('vic').textContent = icon;
-  document.getElementById('vbig').textContent = big;
-  document.getElementById('vsub').innerHTML = opt.sub || '';
-  document.getElementById('vname').textContent = opt.name || '';
-  document.getElementById('vname').style.display = opt.name ? '' : 'none';
-  document.getElementById('vroll').textContent = opt.roll ? String(opt.roll).toUpperCase() : '';
-
-  const rail = document.getElementById('vrail');
-  const chips = [];
-  const st = opt.st;
-  if(st && st.end)        chips.push([fmt(st.end), 'Valid through']);
-  if(st && st.days!=null) chips.push([daysPhrase(st.days), 'Time left']);
-  const cat = opt.m ? val(opt.m,'category') : '';
-  if(cat) chips.push([cat, 'Category']);
-  if(opt.roll){
-    const s = statsFor(opt.roll);
-    chips.push([s.weekStreak, 'Week streak']);
-    chips.push([time(new Date()), 'Entry time']);
-    chips.push([s.month, 'Sessions this mo']);
-  }
-  rail.style.display = chips.length ? 'grid' : 'none';
-  rail.innerHTML = chips.map(([v,l])=>'<div class="vchip"><div class="vv">'+esc(String(v))+'</div><div class="vl">'+l+'</div></div>').join('');
-
-  document.getElementById('verdictPopup').classList.add('show');
-  clearTimeout(popup._t);
-  if(kind!=='busy') popup._t = setTimeout(hidePopup, 5000);
-  renderDashboard();
-}
-function hidePopup(){ document.getElementById('verdictPopup').classList.remove('show'); }
-
-/* ---------------- home dashboard ---------------- */
-function renderDashboard(){
-  const t = todayLog();
-  const active   = roster.filter(m=> statusOf(m).ok);
-  const inToday  = new Set(t.filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
-  const activeIn = active.filter(m=> inToday.has(norm(val(m,'roll')))).length;
-  const soon     = roster.filter(m=>{ const s=statusOf(m); return s.state==='soon'||s.state==='grace'; }).length;
-
-  document.getElementById('dashTiles').innerHTML =
-    tile(inToday.size,'Swimmers in','of '+active.length+' active members')+
-    tile(t.filter(e=>kindOf(e.verdict)==='bad').length,'Turned away','expired or unknown today')+
-    tile(Math.max(0, active.length - activeIn),'Not in yet','active, haven’t scanned today')+
-    tile(busiestHour(t),'Busiest hour','across today')+
-    tile(soon,'Expiring soon','within '+SOON_DAYS+' days');
-
-  const feed = document.getElementById('feedTable');
-  if(!log.length){ feed.innerHTML='<div class="empty">No scans yet today.</div>'; return; }
-  feed.innerHTML = log.slice(0,12).map(e=>{
-    const d=new Date(e.ts), k=kindOf(e.verdict);
-    const dotColor = k==='ok'?'var(--aqua)':k==='bad'?'var(--coral)':'var(--sun)';
-    return '<div class="feedRow" onclick="openMember(\''+jsArg(e.roll)+'\')">'+
-      '<span class="feedDot" style="background:'+dotColor+'"></span>'+
-      '<div><div class="fname">'+esc(e.name||e.roll)+'</div><div class="froll">'+esc(e.roll)+' · '+esc(e.verdict)+'</div></div>'+
-      '<span class="ftime">'+time(d)+'</span></div>';
-  }).join('');
-}
-
-/* ---------------- sound ---------------- */
-let actx=null;
-function audioUnlock(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
-function tone(f,start,dur,type){
-  if(!actx) return;
-  const o=actx.createOscillator(), g=actx.createGain();
-  o.type=type||'sine'; o.frequency.value=f; o.connect(g); g.connect(actx.destination);
-  const t=actx.currentTime+start;
-  g.gain.setValueAtTime(.0001,t);
-  g.gain.exponentialRampToValueAtTime(.25,t+.01);
-  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
-  o.start(t); o.stop(t+dur+.02);
-}
-function beep(k){
-  audioUnlock(); if(!actx) return;
-  if(k==='ok'){ tone(920,0,.08); tone(1380,.09,.13); }
-  else if(k==='warn'){ tone(680,0,.1); tone(680,.16,.1); }
-  else { tone(170,0,.45,'sawtooth'); }
-}
-
-/* ---------------- entry log ---------------- */
-function record(roll,name,v){
-  log.unshift({ts:new Date().toISOString(), roll:String(roll).toUpperCase(), name, verdict:v});
-  if(log.length>20000) log.length=20000;
-  localStorage.setItem(LS.log, JSON.stringify(log));
-  invalidateVisits();
-  paintStat();
-}
-function todayLog(){ return log.filter(e=>sameDay(new Date(e.ts), new Date())); }
-function kindOf(v){
-  if(v==='PAID') return 'ok';
-  if(['EXPIRED','NOT REGISTERED','INACTIVE'].includes(v)) return 'bad';
-  return 'warn';
-}
-function renderLog(){
-  const t = todayLog();
-  const allowed = t.filter(e=>e.verdict==='PAID').length;
-  const turned  = t.filter(e=>kindOf(e.verdict)==='bad').length;
-  const repeats = t.filter(e=>e.verdict==='REPEAT').length;
-
-  document.getElementById('logSub').textContent = fmt(new Date());
-  document.getElementById('dayTiles').innerHTML =
-    tile(allowed,'Swimmers in','unique entries today')+
-    tile(turned,'Turned away','expired or unknown')+
-    tile(repeats,'Repeat scans','second visit same day')+
-    tile(busiestHour(t),'Busiest hour','across today')+
-    tile(log.length,'Total logged','all time on this laptop');
-
-  const box = document.getElementById('logTable');
-  if(!log.length){ box.innerHTML='<div class="empty">No scans yet.</div>'; return; }
-  box.innerHTML = '<table><tr><th>Time</th><th>Roll no</th><th>Name</th><th>Result</th></tr>'+
-    log.slice(0,400).map(e=>{
-      const d=new Date(e.ts);
-      return '<tr class="click" onclick="openMember(\''+jsArg(e.roll)+'\')">'+
-        '<td class="mono">'+fmt(d)+' · '+time(d)+'</td>'+
-        '<td class="mono">'+esc(e.roll)+'</td><td>'+esc(e.name||'—')+'</td>'+
-        '<td><span class="pill '+kindOf(e.verdict)+'">'+esc(e.verdict)+'</span></td></tr>';
-    }).join('')+'</table>';
-}
-function busiestHour(entries){
-  if(!entries.length) return '—';
-  const b={}; entries.forEach(e=>{ const h=new Date(e.ts).getHours(); b[h]=(b[h]||0)+1; });
-  const h=+Object.keys(b).sort((x,y)=>b[y]-b[x])[0];
-  const ap=h<12?'am':'pm', hh=h%12||12;
-  return hh+ap;
-}
-function exportLog(){
-  const csv='Date,Time,Roll No,Name,Result\n'+log.map(e=>{
-    const d=new Date(e.ts);
-    return [fmt(d),time(d),e.roll,e.name,e.verdict].map(csvCell).join(',');
-  }).join('\n');
-  download('pool-entry-log-'+fmtISO(new Date())+'.csv', csv);
-}
-function clearLog(){
-  if(!confirm('Delete all '+log.length+' logged scans from this laptop?\n\nAttendance calendars and session counts are built from this history — download the CSV first.')) return;
-  log=[]; localStorage.setItem(LS.log,'[]'); invalidateVisits(); renderLog(); paintStat();
-}
-
-/* =====================================================================
-   ATTENDANCE — a "session" = a day with a PAID scan.
-   ===================================================================== */
-/* The members table asks for every member's history on every render, and
-   re-renders on each sync, search keystroke and scan. Walking the whole
-   log per member was O(members × scans); this walks it once and caches
-   until the log actually changes. */
-let visitCache=null;
-function invalidateVisits(){ visitCache=null; }
-function visitMap(){
-  if(visitCache) return visitCache;
-  visitCache={};
-  log.forEach(e=>{
-    if(e.verdict!=='PAID' && e.verdict!=='REPEAT') return;
-    const k=norm(e.roll), d=fmtISO(new Date(e.ts));
-    (visitCache[k] = visitCache[k] || {});
-    visitCache[k][d]=(visitCache[k][d]||0)+1;
-  });
-  return visitCache;
-}
-function visitsFor(roll){ return visitMap()[norm(roll)] || {}; }
-function statsFor(roll){
-  const v=visitsFor(roll);
-  const days=Object.keys(v).sort();
-  const today=midnight(new Date());
-  const since=n=>{ const x=new Date(today); x.setDate(x.getDate()-n); return x; };
-  const inRange=from=>days.filter(d=>parseDate(d)>=midnight(from)).length;
-
-  const last = days.length ? parseDate(days[days.length-1]) : null;
-  const gap  = last ? Math.round((today-midnight(last))/86400000) : null;
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  let streak=0;
-  for(let w=0; w<26; w++){
-    const a=since(7*(w+1)), b=since(7*w);
-    if(days.some(d=>{const x=parseDate(d); return x>midnight(a) && x<=midnight(b);})) streak++;
-    else break;
-  }
-  const prevDays = days.filter(d=>parseDate(d)<today);
-  const prev = prevDays.length ? parseDate(prevDays[prevDays.length-1]) : null;
-  const prevGap = prev ? Math.round((today-midnight(prev))/86400000) : null;
-  const label=(d,g)=> !d ? '—' : (g===0?'today':g===1?'yesterday':g<7?g+' days ago':fmt(d));
-
-  return {
-    total:days.length, month:inRange(monthStart), last30:inRange(since(30)),
-    perWeek:inRange(since(56))/8, days:v, last, gap, weekStreak:streak, first:days[0]||null,
-    lastLabel: label(last,gap), prevLabel: prev ? label(prev,prevGap) : ''
-  };
-}
-
-/* ---------------- profile ---------------- */
-let currentRoll=null;
-function openMember(roll){
-  currentRoll=roll;
-  const m=index[norm(roll)], s=statsFor(roll);
-  const st=statusOf(m);
-  const end=st.end;
-  const phone=m?val(m,'phone'):'';
-  const category=m?val(m,'category'):'';
-  const gender=m?val(m,'gender'):'';
-  const tags=[category,gender].filter(Boolean);
-
-  document.getElementById('profile').innerHTML =
-    '<div class="phead">'+
-      '<div><h2>'+esc(m?val(m,'name'):'Unknown member')+'</h2>'+
-        '<div class="sub mono" style="margin:6px 0 0;letter-spacing:2px">'+esc(String(roll).toUpperCase())+
-        (phone?' &nbsp;·&nbsp; '+esc(phone):'')+'</div>'+
-        (tags.length?'<div class="row" style="margin-top:10px">'+tags.map(t=>'<span class="pill" style="border-color:var(--line);color:var(--dim)">'+esc(t)+'</span>').join('')+'</div>':'')+
-      '</div>'+
-      '<div class="spacer"></div>'+
-      '<span class="pill '+st.kind+'" style="font-size:12px;padding:6px 14px">'+st.label+'</span>'+
-    '</div>'+
-    (end ? '<div class="card"><label>Subscription</label>'+
-      '<div class="sub" style="margin:0">Valid through <b style="color:var(--txt)">'+fmt(end)+'</b> — '+
-      (st.days<0?daysPhrase(st.days):st.days===0?'today is the last day':daysPhrase(st.days)+' left')+'</div></div>' : '')+
-    payments(m)+
-    '<div class="tiles">'+
-      tile(s.total,'Total sessions', s.first?('since '+fmt(parseDate(s.first))):'no visits yet')+
-      tile(s.month,'This month','')+
-      tile(s.last30,'Last 30 days','')+
-      tile(s.perWeek.toFixed(1),'Avg per week','over 8 weeks')+
-      tile(s.gap===null?'—':(s.gap===0?'today':s.gap+'d'),'Since last visit', s.last?('last: '+s.lastLabel):'')+
-      tile(s.weekStreak,'Week streak','weeks in a row')+
-    '</div>'+
-    (phone ? '<div class="row" style="margin:0 0 18px"><button onclick="waRemind()">Message on WhatsApp</button></div>' : '')+
-    '<div class="card"><label>Attendance</label>'+
-      '<div class="sub" style="margin:-4px 0 18px">Last 6 months</div>'+
-      calendar(s.days,end)+
-      '<div class="legend">'+
-        '<span><i style="background:var(--aqua)"></i>came</span>'+
-        '<span><i style="background:var(--cyan)"></i>scanned twice</span>'+
-        '<span><i style="background:#123249"></i>subscribed, didn\'t come</span>'+
-        '<span><i style="background:#0a2035"></i>not subscribed</span>'+
-        '<span><i style="background:transparent;outline:2px solid var(--sun)"></i>today</span>'+
-      '</div>'+
-    '</div>';
-  show('memberView');
-}
-function tile(n,l,s){
-  return '<div class="tile"><div class="n">'+n+'</div><div class="l">'+l+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
-}
-/* Every payment row behind this person, and what each one bought — so a
-   disputed expiry can be traced back through the renewals that built it. */
-function payments(m){
-  const rows = m && m.__rows ? m.__rows : [];
-  if(rows.length<2 && !rows.some(r=>planMonths(r)===null)) return '';
-  return '<div class="card"><label>Payment history</label>'+
-    '<div class="sub" style="margin:-4px 0 12px">'+rows.length+' payment'+(rows.length===1?'':'s')+' — renewals bought while still active extend the previous period</div>'+
-    '<table><tr><th>Paid on</th><th>Amount</th><th>Category</th><th>Buys</th></tr>'+
-    rows.map(r=>{
-      const paid=parseDate(val(r,'paymentDate')), mo=planMonths(r);
-      const buys = mo===null ? '<span class="pill bad">UNKNOWN TIER</span>'
-                 : mo===0    ? 'Day pass'
-                 : mo+' month'+(mo===1?'':'s');
-      return '<tr><td class="mono">'+(paid?fmt(paid):esc(val(r,'paymentDate')||'—'))+'</td>'+
-        '<td class="mono">'+esc(val(r,'amount')||'—')+'</td>'+
-        '<td>'+esc(val(r,'category')||'—')+'</td><td>'+buys+'</td></tr>';
-    }).join('')+'</table></div>';
-}
-function calendar(visits,end){
-  const out=[], now=new Date(), todayISO=fmtISO(now);
-  for(let back=5; back>=0; back--){
-    const cur=new Date(now.getFullYear(), now.getMonth()-back, 1);
-    const y=cur.getFullYear(), mo=cur.getMonth();
-    const first=new Date(y,mo,1).getDay(), len=new Date(y,mo+1,0).getDate();
-    let cells='';
-    for(let i=0;i<first;i++) cells+='<div class="d pad"></div>';
-    for(let d=1;d<=len;d++){
-      const date=new Date(y,mo,d), iso=fmtISO(date), n=visits[iso]||0;
-      let cls='d';
-      if(n>1) cls+=' hit2'; else if(n===1) cls+=' hit';
-      else if(date<=midnight(now) && (!end || date<=midnight(end))) cls+=' in';
-      if(iso===todayISO) cls+=' today';
-      cells+='<div class="'+cls+'" title="'+fmt(date)+(n?' — '+n+' scan'+(n>1?'s':''):'')+'">'+d+'</div>';
-    }
-    out.push('<div class="mo"><h4>'+MON[mo]+' '+y+'</h4>'+
-      '<div class="dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>'+
-      '<div class="days">'+cells+'</div></div>');
-  }
-  return '<div class="cal">'+out.join('')+'</div>';
-}
-function waRemind(){
-  const m=index[norm(currentRoll)];
-  if(!m) return;
-  const end=computeEnd(m);
-  const name=val(m,'name').split(' ')[0];
-  const num=val(m,'phone').replace(/\D/g,'');
-  const txt=encodeURIComponent('Hi '+name+', your swimming subscription '+
-    (end?'is valid till '+fmt(end)+'. ':'needs renewal. ')+'Please visit the office to renew. Thanks!');
-  window.open('https://wa.me/'+(num.length>10?num:'91'+num)+'?text='+txt,'_blank');
-}
-
-/* ---------------- members table ---------------- */
-function renderMembers(){
-  const q=(document.getElementById('memberSearch').value||'').toLowerCase();
-  const box=document.getElementById('memberTable');
-  const extra = members.length>roster.length ? ' · '+members.length+' payment rows' : '';
-  document.getElementById('adminSub').textContent =
-    roster.length ? roster.length+' members'+extra+' · not-in-yet first, then who expires soonest' : 'Nothing loaded yet';
-  if(!roster.length){ box.innerHTML='<div class="empty">Nothing loaded.</div>'; return; }
-
-  const todayRolls = new Set(todayLog().filter(e=>e.verdict==='PAID'||e.verdict==='REPEAT').map(e=>norm(e.roll)));
-  const rows=roster.filter(m=>!q || (val(m,'name')+' '+val(m,'roll')).toLowerCase().includes(q)).map(m=>{
-    const st = statusOf(m);
-    return {m, st, camToday: todayRolls.has(norm(val(m,'roll'))), eligible: st.ok};
-  }).sort((a,b)=>{
-    if(a.eligible && b.eligible && a.camToday!==b.camToday) return a.camToday? -1:1;
-    return (a.st.days===null?9e9:a.st.days)-(b.st.days===null?9e9:b.st.days);
-  });
-
-  box.innerHTML='<table><tr><th>Roll no</th><th>Name</th><th>Category</th><th>Gender</th><th>Valid through</th><th>Payments</th><th>Sessions</th><th>Last visit</th><th>Today</th><th>Status</th></tr>'+
-    rows.map(r=>{
-      const s=statsFor(val(r.m,'roll'));
-      const rowTint = !r.eligible ? '' : r.camToday ? 'background:rgba(0,229,138,.05)' : 'background:rgba(255,77,94,.045)';
-      const today = !r.eligible ? '<span style="color:var(--faint)">—</span>'
-        : r.camToday ? '<span class="pill ok">IN</span>' : '<span class="pill bad">NOT IN</span>';
-      const n = (r.m.__rows||[]).length;
-      return '<tr class="click" style="'+rowTint+'" onclick="openMember(\''+jsArg(val(r.m,'roll'))+'\')">'+
-        '<td class="mono">'+esc(val(r.m,'roll'))+'</td><td>'+esc(val(r.m,'name'))+'</td>'+
-        '<td>'+esc(val(r.m,'category')||'—')+'</td><td>'+esc(val(r.m,'gender')||'—')+'</td>'+
-        '<td class="mono">'+(r.st.end?fmt(r.st.end):'—')+'</td>'+
-        '<td class="mono">'+(n>1?n+' <span style="color:var(--faint)">renewed</span>':'1')+'</td>'+
-        '<td class="mono">'+(s.total||'—')+(s.total?' <span style="color:var(--faint)">('+s.month+' this mo)</span>':'')+'</td>'+
-        '<td class="mono">'+s.lastLabel+'</td>'+
-        '<td>'+today+'</td>'+
-        '<td><span class="pill '+r.st.kind+'">'+r.st.label+'</span></td></tr>';
-    }).join('')+'</table>';
-}
-
-/* ---------------- settings ---------------- */
-function paintSettings(){
-  document.getElementById('setMembers').textContent = roster.length
-    ? roster.length+' loaded'+(members.length>roster.length ? ' (from '+members.length+' payment rows)' : '')
-    : 'none loaded';
-  const s=localStorage.getItem(LS.synced);
-  document.getElementById('setSynced').textContent = s ? fmt(new Date(s))+' · '+time(new Date(s)) : 'never';
-}
-
-/* ---------------- sheet loading (config-driven) ---------------- */
-function toCsvUrl(u){
-  u=(u||'').trim(); if(!u) return '';
-  if(u.includes('output=csv')||u.includes('out:csv')) return u;
-  const id=(u.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)||[])[1];
-  if(!id) return u;
-  const gid=(u.match(/[#&?]gid=(\d+)/)||[])[1]||'0';
-  return 'https://docs.google.com/spreadsheets/d/'+id+'/gviz/tq?tqx=out:csv&gid='+gid;
-}
-/* No sheet configured = no members, full stop. We deliberately WIPE the
-   cached copy rather than keep showing whatever this laptop last held —
-   otherwise a device that once synced test data would keep letting those
-   people in long after the data source was pulled. */
-function noSource(loud){
-  headers=[]; members=[]; roster=[]; index={}; map={};
-  [LS.rows, LS.hdr, LS.synced].forEach(k=>localStorage.removeItem(k));
-  paintStat(); renderMembers();
-  document.getElementById('liveDot').classList.remove('live');
-  document.getElementById('stat').innerHTML='<b style="color:var(--sun)">no sheet</b> · set config.js';
-  if(onScan()) renderDashboard();
-  if(document.getElementById('settingsView').classList.contains('on')) paintSettings();
-  if(loud) setMsg('settingsMsg','info','No Google Sheet configured yet — paste the share link into <code>SHEET_URL</code> in <code>config.js</code>.');
-}
-/* A miss at the gate re-syncs and retries before saying NOT REGISTERED.
-   That only helps if it waits for the fetch actually in flight — an
-   early return would hand the retry the same stale list it just missed
-   on, so concurrent callers share one promise instead. */
-function sync(loud){
-  if(!CONFIG.SHEET_URL){ noSource(loud); return Promise.resolve(); }
-  if(syncing) return syncing;
-  syncing = doSync(loud);
-  syncing.catch(()=>{}).then(()=>{ syncing=null; });
-  return syncing;
-}
-async function doSync(loud){
-  try{
-    const url = toCsvUrl(CONFIG.SHEET_URL);
-    const res=await fetch(url+(url.includes('?')?'&':'?')+'cb='+Date.now());
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const text=await res.text();
-    if(/^\s*</.test(text)) throw new Error('Sheet is not shared publicly (got a web page, not CSV)');
-
-    const parsed=parseCSV(text);
-    if(parsed.length<2) throw new Error('Sheet looks empty');
-
-    headers=parsed[0].map(h=>h.trim());
-    members=parsed.slice(1).filter(r=>r.some(c=>c.trim()))
-      .map(r=>{ const o={}; headers.forEach((h,i)=>o[h]=(r[i]||'').trim()); return o; });
-
-    map = resolveMap(headers, members);
-    localStorage.setItem(LS.hdr,JSON.stringify(headers));
-    localStorage.setItem(LS.rows,JSON.stringify(members));
-    localStorage.setItem(LS.synced,new Date().toISOString());
-
-    buildIndex(); paintStat(); renderMembers(); if(onScan()) renderDashboard();
-    if(document.getElementById('settingsView').classList.contains('on')) paintSettings();
-    if(loud) setMsg('settingsMsg','good','Synced — '+roster.length+' members from '+members.length+' payment rows.');
-  }catch(err){
-    document.getElementById('liveDot').classList.remove('live');
-    if(loud) setMsg('settingsMsg','err','Sync failed: '+esc(err.message));
-    else document.getElementById('stat').innerHTML='<b style="color:var(--coral)">sync failed</b> · last copy';
-  }
-}
-/* One person is many rows: a row per payment, renewals piling up over
-   months. `members` stays the raw sheet; `roster` is one record per
-   person — the newest row's details, plus __rows (their whole payment
-   history) and __end (the chained expiry). Everything the gate and the
-   screens read goes through roster/index, never the raw rows, so a
-   renewal added anywhere in the sheet counts the same. */
-function buildIndex(){
-  index={}; roster=[];
-  const groups={};
-  members.forEach(m=>{
-    const k=norm(val(m,'roll'));
-    if(!k) return;
-    (groups[k] = groups[k] || []).push(m);
-  });
-  Object.keys(groups).forEach(k=>{
-    const rows = groups[k].slice().sort((a,b)=>{
-      const pa=parseDate(val(a,'paymentDate')), pb=parseDate(val(b,'paymentDate'));
-      if(pa&&pb) return pa-pb;
-      return pa ? -1 : pb ? 1 : 0;      // undated rows first, they can't anchor a chain
-    });
-    const rec = Object.assign({}, rows[rows.length-1]);   // newest row supplies name/category/phone
-    rec.__rows = rows;
-    rec.__end  = chainEnd(rows);
-    index[k]   = rec;
-    roster.push(rec);
-  });
-}
-function paintStat(){
-  const s=localStorage.getItem(LS.synced);
-  document.getElementById('stat').innerHTML='<b>'+roster.length+'</b> members · '+(s?time(new Date(s)):'—');
-  document.getElementById('liveDot').classList.toggle('live', roster.length>0);
-  const n=todayLog().filter(e=>e.verdict==='PAID').length;
-  document.getElementById('logCount').innerHTML = n?'<span class="badge">'+n+'</span>':'';
-}
-
-/* Uses CONFIG.COLUMNS if given; falls back to shape/name detection for
-   any field left blank, so a header typo doesn't silently break scanning. */
-function resolveMap(hdrs, rows){
-  const cfg = CONFIG.COLUMNS || {};
-  const auto = autoMap(hdrs, rows);
-  const out = {};
-  ['roll','name','end','start','phone','status','category','gender','paymentDate','amount'].forEach(k=>{
-    out[k] = (cfg[k] && matchHeader(hdrs, cfg[k])) || auto[k];
-  });
-  return out;
-}
-/* Config names are matched loosely on purpose: 'id' should find a column
-   headed 'ID' or 'id '. Exact matching meant a stray capital silently
-   fell through to auto-detection and hid the typo. */
-function matchHeader(hdrs, want){
-  const w = String(want).toLowerCase().trim();
-  return hdrs.find(h=>h.toLowerCase().trim()===w) || '';
-}
-function autoMap(hdrs,rows){
-  const m={}, sample=rows.slice(0,40);
-  const ROLL_RE=/^[a-z]{2,4}\d{2}[a-z]{2,8}\d{3,6}$/i;
-  let best=null,score=0;
-  hdrs.forEach(h=>{
-    const hits=sample.filter(r=>ROLL_RE.test(norm(r[h]||''))).length;
-    if(hits>score){ score=hits; best=h; }
-  });
-  m.roll = (best && score>=Math.max(2,sample.length*0.3)) ? best
-         : pick(hdrs,['roll no','rollno','roll number','roll_no','roll','student id','id no','id']);
-  m.name  =pick(hdrs,['name','student name','full name']);
-  // an explicit expiry column always wins if present — everything below is the fallback computation path
-  m.end   =pick(hdrs,['subscription ending month','ending month','end month','plan end','end date','valid till','valid until','expiry','expiry date','expires','renewal date','due date']);
-  m.paymentDate=pick(hdrs,['date','payment date','date of payment','paid on','transaction date']);
-  m.amount=pick(hdrs,['amount','fee','fees','amount paid','payment']);
-  m.category=pick(hdrs,['category','applicable to','type','program','level','swim category','group','training type']);
-  m.start =pick(hdrs,['plan start','start date','from','joined','registration date']);
-  m.phone =pick(hdrs,['phone','mobile','contact','phone no','mobile no','whatsapp']);
-  m.status=pick(hdrs,['status','active','payment status','remarks']);
-  m.gender=pick(hdrs,['gender','sex','male/female','m/f']);
-  return m;
-}
-function pick(hdrs,wants){
-  const low=hdrs.map(h=>h.toLowerCase().trim());
-  for(const w of wants){ const i=low.indexOf(w); if(i>=0) return hdrs[i]; }
-  for(const w of wants){ const i=low.findIndex(h=>h.includes(w)); if(i>=0) return hdrs[i]; }
-  return '';
-}
-function val(m,key){ return (map[key] && m[map[key]]!=null) ? String(m[map[key]]) : ''; }
-
-/* =====================================================================
-   EXPIRY — computed to the DAY, and chained across renewals.
-
-   The sheet doesn't carry an expiry date: just who paid, when, how much,
-   and what category. Plan length (1/3/6/12 months, or a single-day guest
-   slot) comes from CONFIG.PLANS, keyed by category then exact amount.
-
-   Two rules that matter, both of them things a month-granular version
-   used to get wrong:
-
-   1. DAY PRECISION. A one-month plan bought on 10 June runs 10 June to
-      9 July inclusive — not "all of July". `end` below is always the
-      LAST DAY the member may swim, and every check compares whole days,
-      never months. CONFIG.GRACE_DAYS buys back a few days past that if
-      the pool wants to be lenient.
-
-   2. RENEWALS CHAIN. One person = many rows over time. Rows are sorted
-      by payment date and each period starts either on its payment date
-      or the day after the previous period ended, whichever is later. So
-      renewing early adds time on top instead of throwing away the days
-      already paid for; renewing after a lapse simply starts fresh. Guest
-      day-passes never chain — they're one day, standalone.
-
-   If the amount doesn't match a known price for that category we return
-   null rather than guess: a wrong guess either locks out someone who
-   paid or lets someone in free. Null surfaces as "NO END DATE — check
-   manually" instead. An explicit expiry column, if the sheet ever grows
-   one, always overrides the whole calculation.
-   ===================================================================== */
-function addMonths(d, n){
-  const y = d.getFullYear(), m = d.getMonth()+n;
-  const ny = y + Math.floor(m/12), nm = ((m%12)+12)%12;
-  const lastDay = new Date(ny, nm+1, 0).getDate();
-  return new Date(ny, nm, Math.min(d.getDate(), lastDay));
-}
-function addDays(d,n){ const x=midnight(d); x.setDate(x.getDate()+n); return x; }
-function lastDayOf(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
-
-/* An expiry written by hand can be month-only ("July", "Aug 2026"). A
-   member is not expired half way through the month they were given, so
-   a month-only expiry means the LAST day of that month. */
-function parseEnd(s){
-  const p = parseDateP(s);
-  if(!p) return null;
-  return p.monthOnly ? lastDayOf(p.d) : midnight(p.d);
-}
-
-/* months of access this row buys — 0 = single-day pass, null = unknown */
-function planMonths(m){
-  const amt = parseFloat(String(val(m,'amount')).replace(/[^\d.]/g,''));
-  const cat = val(m,'category').toLowerCase().trim();
-  if(isNaN(amt) || !cat) return null;
-  const plan = (CONFIG.PLANS||{})[cat];
-  if(!plan || plan[amt]==null) return null;
-  return plan[amt];
-}
-
-/* one row on its own, ignoring any other rows for the same person */
-function rowEnd(m){
-  if(!m) return null;
-  const explicit = parseEnd(val(m,'end'));
-  if(explicit) return explicit;
-  const paid   = parseDate(val(m,'paymentDate'));
-  const months = planMonths(m);
-  if(!paid || months===null) return null;
-  return months===0 ? midnight(paid) : addDays(addMonths(midnight(paid), months), -1);
-}
-
-/* every row for one person, oldest payment first → last valid day */
-function chainEnd(rows){
-  let end = null;
-  rows.forEach(r=>{
-    const explicit = parseEnd(val(r,'end'));
-    if(explicit){ if(!end || explicit>end) end = explicit; return; }
-
-    const paid   = parseDate(val(r,'paymentDate'));
-    const months = planMonths(r);
-    if(!paid || months===null) return;          // unreadable row — skip, don't guess
-
-    if(months===0){                             // guest day pass: that day only, no chaining
-      const one = midnight(paid);
-      if(!end || one>end) end = one;
-      return;
-    }
-    // renewed while still valid? start the day after the current period ends
-    const from = (end && end >= midnight(paid)) ? addDays(end,1) : midnight(paid);
-    const e    = addDays(addMonths(from, months), -1);
-    if(!end || e>end) end = e;
-  });
-  return end;
-}
-
-/* Index records carry their chained expiry on __end. A bare row (no
-   chain built yet) falls back to being read on its own. */
-function computeEnd(m){ return (m && '__end' in m) ? m.__end : rowEnd(m); }
-
-/* whole days from today to the last valid day: 0 = today IS the last day */
-function daysLeft(end){ return Math.round((midnight(end) - midnight(new Date()))/86400000); }
-
-/* =====================================================================
-   STATUS — the single source of truth for "can this person swim?".
-   Scanner, members table, profile and dashboard all call this, so a
-   change to the rule changes every screen at once.
-   ===================================================================== */
-const SOON_DAYS = 7;   // how far ahead to start nudging people to renew
-function statusOf(m){
-  if(!m) return {state:'nodate', kind:'warn', label:'NO END DATE', end:null, days:null, ok:false};
-
-  const raw = val(m,'status').toLowerCase().trim();
-  if(INACTIVE.includes(raw))
-    return {state:'inactive', kind:'bad', label:'NOT ACTIVE', end:null, days:null, ok:false, why:val(m,'status')};
-
-  const end = computeEnd(m);
-  if(!end) return {state:'nodate', kind:'warn', label:'NO END DATE', end:null, days:null, ok:false};
-
-  const days  = daysLeft(end);
-  const grace = Math.max(0, +(CONFIG.GRACE_DAYS||0));
-
-  if(days < -grace)   return {state:'expired', kind:'bad',  label:'EXPIRED',   end, days, ok:false};
-  if(days < 0)        return {state:'grace',   kind:'warn', label:'IN GRACE',  end, days, ok:true};
-  if(days === 0)      return {state:'soon',    kind:'warn', label:'LAST DAY',  end, days, ok:true};
-  if(days <= SOON_DAYS)
-    return {state:'soon', kind:'warn', label:days+' DAY'+(days===1?'':'S')+' LEFT', end, days, ok:true};
-  return {state:'ok', kind:'ok', label:'PAID', end, days, ok:true};
-}
-function daysPhrase(d){
-  if(d < 0)  return (-d)+' day'+(d===-1?'':'s')+' over';
-  if(d === 0) return 'Last day';
-  return d+' day'+(d===1?'':'s');
-}
-
-/* ---------------- helpers ---------------- */
-function norm(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
-function midnight(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-function sameDay(a,b){ return midnight(a).getTime()===midnight(b).getTime(); }
-const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function fmt(d){ return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear(); }
-function fmtISO(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function time(d){ let h=d.getHours(); const ap=h<12?'AM':'PM'; h=h%12||12;
-  return h+':'+String(d.getMinutes()).padStart(2,'0')+' '+ap; }
-/* Real sheets are written by hand, so this has to survive 08/07/2026,
-   08-06-2026, 15.07.2026, 16:07:2026, 21\7\26, 11-07-26, 10 July 2026,
-   22-July-2026 and a bare "July".
-
-   Returns {d, monthOnly}: monthOnly flags the values where only a month
-   was ever written, so callers can decide what a month means for them
-   (an expiry that says "July" means the 31st, not the 1st). parseDate()
-   is the plain-Date wrapper for everything that doesn't care. */
-const MONTH_NAMES = {january:0,february:1,march:2,april:3,may:4,june:5,july:6,august:7,september:8,october:9,november:10,december:11,
-  jan:0,feb:1,mar:2,apr:3,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
-function parseDateP(s){
-  if(!s) return null;
-  s=String(s).trim(); if(!s) return null;
-  s=s.replace(/[\\:]/g,'-');   // "16:07:2026" and "21\7\26" — treat like any other separator
-
-  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(m) return {d:new Date(+m[1],+m[2]-1,+m[3]), monthOnly:false};
-
-  m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
-  if(m){
-    let a=+m[1], b=+m[2], y=+m[3]; if(y<100) y+=2000;
-    if(b>12 && a<=12){ const t=a; a=b; b=t; }   // day/month written the wrong way round
-    return {d:new Date(y,b-1,a), monthOnly:false};
-  }
-
-  /* a written-out month, with or without a day in front of it */
-  const nameMatch = s.toLowerCase().match(/[a-z]+/);
-  if(nameMatch && MONTH_NAMES.hasOwnProperty(nameMatch[0])){
-    const mo = MONTH_NAMES[nameMatch[0]];
-    const yMatch = s.match(/(\d{4})/);
-    const yr = yMatch ? +yMatch[1] : new Date().getFullYear();
-    // whatever 1–2 digit number is left once the 4-digit year is out of the way is the day
-    const dMatch = s.replace(/\d{4}/g,' ').match(/(\d{1,2})/);
-    if(dMatch && +dMatch[1]>=1 && +dMatch[1]<=31)
-      return {d:new Date(yr, mo, +dMatch[1]), monthOnly:false};
-    return {d:new Date(yr, mo, 1), monthOnly:true};
-  }
-
-  m=s.match(/^(\d{1,2})[\/\-](\d{4})$/);
-  if(m) return {d:new Date(+m[2], +m[1]-1, 1), monthOnly:true};
-  m=s.match(/^(\d{4})[\/\-](\d{1,2})$/);
-  if(m) return {d:new Date(+m[1], +m[2]-1, 1), monthOnly:true};
-
-  m=s.match(/^(\d{1,2})$/);
-  if(m && +m[1]>=1 && +m[1]<=12) return {d:new Date(new Date().getFullYear(), +m[1]-1, 1), monthOnly:true};
-
-  const t=Date.parse(s);
-  return isNaN(t)?null:{d:new Date(t), monthOnly:false};
-}
-function parseDate(s){ const p=parseDateP(s); return p?p.d:null; }
-function parseCSV(text){
-  const rows=[]; let row=[],cell='',q=false;
-  text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(q){
-      if(c==='"'){ if(text[i+1]==='"'){ cell+='"'; i++; } else q=false; }
-      else cell+=c;
-    }else{
-      if(c==='"') q=true;
-      else if(c===','){ row.push(cell); cell=''; }
-      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
-      else cell+=c;
-    }
-  }
-  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
-  return rows;
-}
-function csvCell(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
-function download(name,text){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));
-  a.download=name; a.click(); URL.revokeObjectURL(a.href);
-}
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-/* For a value going inside onclick="fn('…')". esc() alone is not enough:
-   it turns ' into &#39;, which the HTML parser decodes back to a real
-   quote before the JS ever runs, breaking out of the string. \xNN
-   escapes survive that round trip intact. */
-function jsArg(s){
-  return esc(String(s==null?'':s).replace(/[\\'"]/g, c=>'\\x'+c.charCodeAt(0).toString(16)));
-}
-function setMsg(id,kind,html){ const el=document.getElementById(id); if(el) el.innerHTML='<div class="msg '+kind+'">'+html+'</div>'; }
-
-/* ---------------- boot ---------------- */
-function init(){
-  log    =JSON.parse(localStorage.getItem(LS.log) ||'[]');
-  headers=JSON.parse(localStorage.getItem(LS.hdr) ||'[]');
-  members=JSON.parse(localStorage.getItem(LS.rows)||'[]');
-  if(members.length){ map = resolveMap(headers, members); buildIndex(); }
-
-  paintLanding();
-
-  if(isUnlocked()) enterApp();
-  else document.getElementById('landingView').classList.add('on');
-
-  setInterval(()=>{ if(isUnlocked()) sync(false); }, SYNC_EVERY_MS);
-  window.addEventListener('focus', ()=>{ if(isUnlocked()) sync(false); });
-}
-init();
-if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
-}
-</script>
+        <div class="modal-body">
+            <p class="effective-date">With Effect From 1st September 2025</p>
+            <div class="table-responsive">
+                <table class="fee-table">
+                    <thead>
+                        <tr>
+                            <th>Slot No.</th>
+                            <th>Timings</th>
+                            <th>For</th>
+                            <th>Advance Pool</th>
+                            <th>Beginner Pool</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1.</td>
+                            <td class="nowrap">6:30 AM – 7:15 AM</td>
+                            <td>Men (M)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>2.</td>
+                            <td class="nowrap">7:15 AM – 8:00 AM</td>
+                            <td>Women (W)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>3.</td>
+                            <td class="nowrap">8:00 AM – 8:45 AM</td>
+                            <td>Men (M)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>4.</td>
+                            <td class="nowrap">8:45 AM – 9:30 AM</td>
+                            <td>Men (M)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>5.</td>
+                            <td class="nowrap">4:00 PM – 4:45 PM</td>
+                            <td>Men (M)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>6.</td>
+                            <td class="nowrap">4:45 PM – 5:30 PM</td>
+                            <td>Women (W)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>7.</td>
+                            <td class="nowrap">5:30 PM – 6:15 PM</td>
+                            <td>Men (M)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>8.</td>
+                            <td class="nowrap">6:15 PM – 7:00 PM</td>
+                            <td>Women (W)</td>
+                            <td><span class="status-badge avail">Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>9.</td>
+                            <td class="nowrap">7:00 PM – 7:45 PM</td>
+                            <td>Men (M)</td>
+                            <td><span class="status-badge unavail">Not Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>10.</td>
+                            <td class="nowrap">7:45 PM – 8:30 PM</td>
+                            <td>Women (W)</td>
+                            <td><span class="status-badge unavail">Not Available</span></td>
+                            <td><span class="status-badge avail">Available</span></td>
+                        </tr>
+                        <tr>
+                            <td>11.</td>
+                            <td class="nowrap">7:00 PM – 9:00 PM</td>
+                            <td>M / W</td>
+                            <td><span class="status-badge reserved">Reserved: Inter-IIT, NSO & Para</span></td>
+                            <td><span class="status-badge unavail">Not Available</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer-flex">
+                <p class="fee-note"><strong>Note:</strong> Open 7 days except Monday morning & public holidays.</p>
+                <a href="https://docs.google.com/document/d/18MQjzxE6C34_1clXVg-YEqP-IqTGix9i/view?usp=drive_link" target="_blank" class="bento-btn primary">View Official Doc ↗</a>
+            </div>
+        </div>
+    </dialog>
+
+    <script src="script.js"></script>
 </body>
 </html>
